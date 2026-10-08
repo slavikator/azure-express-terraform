@@ -28,7 +28,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
               app.get('/', (req, res) => {
                 res.json({
                   status: "success",
-                  message: "🚀 Test! Hello from Express v2.0.0 updated via GitHub Actions CI/CD Pipeline!",
+                  message: "🚀 Test2! Hello from Express v2.0.0 updated via GitHub Actions CI/CD Pipeline!",
                   timestamp: new Date()
                 });
               });
