@@ -32,10 +32,10 @@ jobs:
           echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .tenantId)" >> $GITHUB_ENV
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false
 
       - name: Get Terraform Outputs
         id: tf-outputs

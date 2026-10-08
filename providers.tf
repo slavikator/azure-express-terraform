@@ -13,7 +13,10 @@ terraform {
   }
 
   backend "azurerm" {
-    # ваші параметри бекенду залишаються без змін
+    resource_group_name  = "rg-tfstate"
+    storage_account_name = "sttfstate1791293035"
+    container_name       = "tfstate"
+    key                  = "demo-node.terraform.tfstate"
   }
 }
 
