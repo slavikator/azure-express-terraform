@@ -1,75 +1,43 @@
-name: "Terraform & Azure Container Apps CI/CD"
+name: "Terraform CI/CD Pipeline"
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  deploy:
-    name: "Build & Deploy to ACA"
+  terraform:
+    name: "Terraform Deploy"
     runs-on: ubuntu-latest
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.0
-
-      - name: Parse Azure Credentials for Terraform
-        run: |
-          echo "ARM_CLIENT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientId)" >> $GITHUB_ENV
-          echo "ARM_CLIENT_SECRET=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .clientSecret)" >> $GITHUB_ENV
-          echo "ARM_SUBSCRIPTION_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .subscriptionId)" >> $GITHUB_ENV
-          echo "ARM_TENANT_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r .tenantId)" >> $GITHUB_ENV
+          terraform_version: 1.8.0
 
       - name: Terraform Init
-        run: terraform init -input=false
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false
-
-      - name: Get Terraform Outputs
-        id: tf-outputs
-        run: |
-          echo "ACR_SERVER=$(terraform output -raw acr_login_server)" >> $GITHUB_ENV
-          echo "ACR_USER=$(terraform output -raw acr_username)" >> $GITHUB_ENV
-          echo "ACR_PASS=$(terraform output -raw acr_password)" >> $GITHUB_ENV
-          echo "APP_URL=$(terraform output -raw container_app_url)" >> $GITHUB_ENV
-
-      - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v2
-        with:
-          login-server: ${{ env.ACR_SERVER }}
-          username: ${{ env.ACR_USER }}
-          password: ${{ env.ACR_PASS }}
-
-      - name: Build and Push Docker Image
-        run: |
-          docker build -t ${{ env.ACR_SERVER }}/express-app:${{ github.sha }} .
-          docker push ${{ env.ACR_SERVER }}/express-app:${{ github.sha }}
-
-      - name: Deploy Image to Azure Container App
-        run: |
-          az containerapp update \
-            --name app-express-demo \
-            --resource-group rg-devops-demo-swe \
-            --image ${{ env.ACR_SERVER }}/express-app:${{ github.sha }} \
-            --registry-server ${{ env.ACR_SERVER }} \
-            --registry-username ${{ env.ACR_USER }} \
-            --registry-password ${{ env.ACR_PASS }} \
-            --target-port 3000 \
-            --no-wait
-
-      - name: Show Application URL
-        run: |
-          echo "🚀 Application deployed successfully!"
-          echo "URL: ${{ env.APP_URL }}"
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
