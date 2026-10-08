@@ -62,7 +62,10 @@ jobs:
           az containerapp update \
             --name app-express-demo \
             --resource-group rg-devops-demo-swe \
-            --image ${{ env.ACR_SERVER }}/express-app:${{ github.sha }}
+            --image ${{ env.ACR_SERVER }}/express-app:${{ github.sha }} \
+            --registry-server ${{ env.ACR_SERVER }} \
+            --registry-username ${{ env.ACR_USER }} \
+            --registry-password ${{ env.ACR_PASS }}
 
       - name: Show Application URL
         run: |
