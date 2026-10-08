@@ -65,7 +65,9 @@ jobs:
             --image ${{ env.ACR_SERVER }}/express-app:${{ github.sha }} \
             --registry-server ${{ env.ACR_SERVER }} \
             --registry-username ${{ env.ACR_USER }} \
-            --registry-password ${{ env.ACR_PASS }}
+            --registry-password ${{ env.ACR_PASS }} \
+            --target-port 3000 \
+            --no-wait
 
       - name: Show Application URL
         run: |
