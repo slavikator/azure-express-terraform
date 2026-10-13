@@ -153,6 +153,85 @@ output "rg_name" {
 
 `terraform graph` виводить граф залежностей у форматі DOT.
 
+### 9. Провайдери
+
+#### Як влаштований Terraform
+
+```
+Terraform core                        Провайдери (плагіни)
+─────────────────                     ─────────────────────
+читає .tf файли                       azurerm  → Azure ARM API
+будує граф залежностей         ──►    azuread  → Microsoft Graph API
+порівнює код зі стейтом               random   → нічого, генерує значення
+вирішує: create/update/delete         github   → GitHub API
+```
+
+**Core** нічого не знає про Azure, він вирішує, **що** зробити. **Провайдер** знає, **як**: які API викликати, які поля потрібні, як чекати завершення операції. Тому той самий Terraform працює з Azure, AWS, GitHub і Cloudflare.
+
+#### Звідки береться провайдер
+
+- `source = "hashicorp/azurerm"` — адреса в Terraform Registry: `<namespace>/<назва>`.
+- `terraform init` завантажує його з registry.terraform.io у `.terraform/providers/`. Тому `.terraform/` у `.gitignore`: це бінарники, а не код.
+- Провайдер має **власну версію**, незалежну від версії Terraform.
+- Префікс типу ресурсу показує провайдера: `azurerm_resource_group` → `azurerm`, `random_string` → `random`.
+- Мажорні версії (3 → 4 → 5) ламають сумісність. Про обмеження версій і lock-файл див. розділи 3 і 4.
+
+#### Блок `provider`
+
+```hcl
+provider "azurerm" {
+  features {}                 # обов'язковий для azurerm, навіть порожній
+  subscription_id = "..."     # в azurerm 4.x+ обов'язковий
+}
+```
+
+- У `features {}` налаштовують поведінку, наприклад `resource_group { prevent_deletion_if_contains_resources = false }`. Саме ця перевірка не дала `destroy` видалити групу, в якій лишився `cae-demo`.
+- В azurerm 3.x `subscription_id` можна не вказувати, тоді він береться з `az` або `ARM_SUBSCRIPTION_ID`.
+
+#### Як `azurerm` входить в Azure
+
+| Спосіб | Де |
+|---|---|
+| `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID` | мій CI зараз |
+| OIDC (`ARM_USE_OIDC=true`) | тиждень 8 |
+| managed identity (`ARM_USE_MSI=true`) | Terraform на VM в Azure |
+| Azure CLI (`az login`) | локально на Mac |
+
+Тому локально Terraform працює під моїм акаунтом, а в CI під `github-actions-terraform`.
+
+#### Кілька провайдерів: `alias`
+
+```hcl
+provider "azurerm" {
+  features {}
+}
+
+provider "azurerm" {
+  alias           = "prod"
+  features {}
+  subscription_id = "<інша підписка>"
+}
+
+resource "azurerm_resource_group" "prod_rg" {
+  provider = azurerm.prod
+  ...
+}
+```
+
+Так з одного коду керують кількома підписками чи регіонами.
+
+#### Провайдери в Azure-проєктах
+
+| Провайдер | Для чого |
+|---|---|
+| `azurerm` | ресурси Azure через ARM |
+| `azuread` | Entra ID: app registrations, групи, користувачі (через Microsoft Graph) |
+| `azapi` | будь-який ресурс Azure напряму через ARM API, навіть новий, якого ще немає в `azurerm` |
+| `random` | випадкові імена, суфікси, паролі |
+| `tls` | ключі та сертифікати |
+
+`azurerm` проти `azuread` — та сама різниця, що й `az group` проти `az ad`: ARM проти Microsoft Graph.
+
 ## Команди напам'ять
 
 ```
@@ -190,3 +269,8 @@ terraform providers              # які провайдери потрібні 
 - Коли потрібен `depends_on`?
 - Що означає `-/+` у плані і чому це небезпечно?
 - Чи захищає `sensitive = true` секрет у стейті?
+- Що таке провайдер і як він пов'язаний з Terraform core?
+- Звідки Terraform бере провайдер і де він зберігається?
+- Як провайдер `azurerm` автентифікується в Azure?
+- Як керувати двома підписками з одного коду?
+- Що робити, якщо потрібного ресурсу ще немає в `azurerm`?
