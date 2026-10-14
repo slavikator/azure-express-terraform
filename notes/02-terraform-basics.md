@@ -152,6 +152,53 @@ output "ip" {
 - **Computed** — атрибути, які обчислює провайдер чи Azure, а не я.
 - Помилка при використанні computed-значення в `count` чи `for_each`: *«value depends on resource attributes that cannot be determined until apply»*.
 
+#### Data source детально
+
+Data source **читає** те, що вже існує, і дає використати ці дані в коді, **не беручи під керування**.
+
+```hcl
+data "azurerm_resource_group" "tfstate" {
+  name = "rg-tfstate"          # аргумент = критерій пошуку
+}
+
+output "tfstate_location" {
+  value = data.azurerm_resource_group.tfstate.location   # атрибут = знайдені дані
+}
+```
+
+| | `resource` | `data` |
+|---|---|---|
+| Що робить | створює, змінює, видаляє | лише читає |
+| Хто власник | Terraform | хтось інший: людина, інша команда, інший стейт |
+| `destroy` | видаляє ресурс | нічого не видаляє |
+| Якщо об'єкта немає | створить | **помилка**, `plan` впаде |
+| У плані | `+`, `~`, `-` | `<=` або не видно |
+
+Типові випадки в Azure:
+
+| Data source | Для чого |
+|---|---|
+| `azurerm_client_config` | `tenant_id`, `subscription_id`, `client_id`, `object_id` того, хто запускає Terraform. `object_id` потрібен, наприклад, щоб видати собі доступ до Key Vault |
+| `azurerm_subscription` | ID і назва підписки |
+| `azurerm_virtual_network` | спільна мережа (hub), якою керує інша команда |
+| `azurerm_key_vault_secret` | секрет з Key Vault. **Значення потрапить у стейт** |
+| `terraform_remote_state` | outputs іншого стейту: з'єднати окремі стейти (мережа і застосунки) |
+
+Коли читається:
+
+- зазвичай **під час `plan`**, і в плані не видно;
+- якщо аргументи залежать від `(known after apply)`, читання відкладається до `apply`: у плані `<= data.xxx will be read during apply`;
+- читається при **кожному** `plan` і `apply`, тож дані завжди свіжі.
+
+`data` чи `import`:
+
+- **`data`** — потрібні дані ресурсу, але керує ним хтось інший;
+- **`import`** — відтепер цим ресурсом керую я.
+
+Типова помилка — `import` спільного ресурсу (hub VNet): тоді ваш `destroy` може видалити мережу, від якої залежать інші.
+
+У моєму проєкті: `rg-tfstate` створена вручну і не повинна видалятися Terraform, тож якщо вона потрібна в коді, то лише через `data`.
+
 ### 6. Змінні, locals, outputs
 
 ```hcl
@@ -330,3 +377,8 @@ terraform providers              # які провайдери потрібні 
 - Як провайдер `azurerm` автентифікується в Azure?
 - Як керувати двома підписками з одного коду?
 - Що робити, якщо потрібного ресурсу ще немає в `azurerm`?
+- Що буде, якщо об'єкт, який читає data source, не існує?
+- Коли data source читається під час `plan`, а коли під час `apply`?
+- `data` чи `import`: коли що?
+- Як отримати subscription ID і object ID того, хто запускає Terraform?
+- Як передати значення з одного стейту в інший?
