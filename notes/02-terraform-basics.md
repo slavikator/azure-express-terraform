@@ -96,6 +96,43 @@ output "subscription_id" {
 
 Посилання на ресурс: `<тип>.<ім'я>.<атрибут>`. На data source: `data.<тип>.<ім'я>.<атрибут>`.
 
+#### Локальне ім'я чи `name`: як відповісти на співбесіді
+
+```hcl
+resource "azurerm_virtual_network" "vnet" {   # ← локальне ім'я, для Terraform
+  name = "vnet-demo"                          # ← ім'я в Azure, видно в порталі
+```
+
+> Локальне ім'я існує лише в Terraform: воно утворює адресу ресурсу в стейті (`azurerm_virtual_network.vnet`), і через нього посилаються на ресурс у коді. Azure про нього не знає. `name` — це реальне ім'я ресурсу в Azure, яке видно в порталі. Наслідки змін різні: якщо змінити локальне ім'я, Terraform вирішить, що це новий ресурс, і запропонує видалити старий, тому для перейменування використовують блок `moved`. Якщо змінити `name`, ресурс буде пересоздано, бо ім'я в Azure змінити не можна.
+
+| | Локальне ім'я (`vnet`) | `name` (`vnet-demo`) |
+|---|---|---|
+| Хто знає | лише Terraform | Azure |
+| Для чого | посилання в коді, адреса в стейті | реальне ім'я ресурсу |
+| Унікальність | у межах типу ресурсу в одному модулі | за правилами Azure: VNet у межах RG, storage account глобально |
+| Якщо змінити | destroy + create, якщо немає `moved` | `-/+`, пересоздання |
+
+#### Адреса ресурсу: як відповісти на співбесіді
+
+> Адреса ресурсу — його унікальний ідентифікатор усередині Terraform, складений з типу і локального імені: `azurerm_virtual_network.vnet`. З `count` до неї додається індекс (`[0]`), з `for_each` — ключ (`["web"]`), у модулі — префікс `module.<ім'я>.`. За адресою Terraform зв'язує ресурс у коді з записом у стейті. Її використовують у виводі `plan`, у командах `state list`, `state show`, `state mv`, `state rm`, `import`, `apply -replace`, а також у блоках `moved` і `import`.
+
+Форми адреси:
+
+```
+azurerm_virtual_network.vnet                    # звичайний ресурс
+azurerm_public_ip.pip[0]                        # з count, за індексом
+azurerm_linux_virtual_machine.vm["web"]         # з for_each, за ключем
+module.network.azurerm_virtual_network.this     # ресурс у модулі
+data.azurerm_client_config.current              # data source
+```
+
+Де використовується:
+
+- `terraform state list` — список адрес усіх ресурсів;
+- вивід `plan`: `# azurerm_virtual_network.vnet will be created`;
+- `state show`, `state rm`, `state mv`, `import`, `apply -replace=...`, `plan -target=...`;
+- блоки `moved` і `import` (`from`, `to`).
+
 ### 6. Змінні, locals, outputs
 
 ```hcl
