@@ -133,6 +133,25 @@ data.azurerm_client_config.current              # data source
 - `state show`, `state rm`, `state mv`, `import`, `apply -replace=...`, `plan -target=...`;
 - блоки `moved` і `import` (`from`, `to`).
 
+#### Аргумент чи атрибут, `(known after apply)`: як відповісти на співбесіді
+
+> Аргумент — це вхід: значення, яке я задаю ресурсу в коді, як-от `name` чи `location`. Атрибут — це вихід: значення, яке ресурс віддає і на яке можна послатися, наприклад `azurerm_public_ip.pip.ip_address`. Атрибути включають усі аргументи плюс computed-значення, які визначає провайдер або Azure: `id`, IP-адреси. Поки ресурс не створено, таких значень немає, і `plan` позначає їх `(known after apply)`. Ця позначка переходить і на ресурси, що на них посилаються. Через це computed-значення не можна використовувати в `count` і в ключах `for_each`, бо Terraform має знати їх уже під час `plan`.
+
+```hcl
+resource "azurerm_public_ip" "pip" {
+  name              = "pip-demo-vm"   # аргумент (вхід)
+  allocation_method = "Static"        # аргумент (вхід)
+}
+
+output "ip" {
+  value = azurerm_public_ip.pip.ip_address   # атрибут (вихід), його задає Azure
+}
+```
+
+- Різниця в **напрямку**: аргумент — що передаю я, атрибут — що віддає ресурс.
+- **Computed** — атрибути, які обчислює провайдер чи Azure, а не я.
+- Помилка при використанні computed-значення в `count` чи `for_each`: *«value depends on resource attributes that cannot be determined until apply»*.
+
 ### 6. Змінні, locals, outputs
 
 ```hcl
