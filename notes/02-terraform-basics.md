@@ -248,6 +248,82 @@ output "rg_name" {
 
 **У моєму проєкті:** локально `ssh_public_key` береться з `terraform.tfvars`, а в CI з `TF_VAR_ssh_public_key` (секрет `SSH_PUBLIC_KEY`).
 
+#### Змінні детально
+
+Усі аргументи блоку (жоден не обов'язковий):
+
+```hcl
+variable "vm_size" {
+  type        = string
+  default     = "Standard_B2ls_v2"
+  description = "Розмір VM"
+  sensitive   = false
+  nullable    = false                       # заборонити null
+  validation {
+    condition     = startswith(var.vm_size, "Standard_")
+    error_message = "Розмір має починатися з Standard_."
+  }
+}
+```
+
+**Обов'язкова чи ні:** без `default` змінна обов'язкова (як `ssh_public_key`). Значення, що відрізняються між середовищами, і секрети робіть без `default`, щоб їх неможливо було забути.
+
+**Типи:**
+
+```hcl
+list(string)      # ["a", "b"], порядок важливий, можуть повторюватися
+set(string)       # унікальні, без порядку; підходить для for_each
+map(string)       # { key = "value" }
+
+object({           # поля різних типів
+  size    = string
+  disk_gb = number
+  zones   = optional(list(string), [])   # поле можна не передавати
+})
+
+map(object({ size = string }))           # типово для for_each
+```
+
+Тип потрібен, щоб Terraform перевірив значення до звернення в Azure і дав зрозумілу помилку.
+
+**`validation`:**
+
+- блоків може бути кілька;
+- виконується на початку `plan`, до звернень в Azure;
+- з Terraform 1.9 у `condition` можна посилатися на інші змінні;
+- корисні функції: `contains`, `can(regex(...))`, `length`, `startswith`, `alltrue`.
+
+**`sensitive` і `ephemeral`:**
+
+- `sensitive = true` ховає значення з `plan` і логів, output з такою змінною теж мусить бути `sensitive`;
+- **у стейті значення лежить відкритим текстом**;
+- `ephemeral = true` (Terraform 1.10+): значення не потрапляє ні в план, ні в стейт, але використовувати його можна лише там, де Terraform не мусить його зберігати.
+
+**Передача складних типів** — у синтаксисі HCL:
+
+```
+terraform plan -var='zones=["1","2"]'
+export TF_VAR_tags='{ env = "dev", owner = "me" }'
+```
+
+| Файл | Підхоплюється | Типове використання |
+|---|---|---|
+| `terraform.tfvars` | автоматично | локальні значення |
+| `*.auto.tfvars` | автоматично | додаткові значення |
+| `prod.tfvars` | лише через `-var-file` | значення для середовища |
+
+Файли без секретів (`dev.tfvars`, `prod.tfvars`) зазвичай комітять, секрети передають через `TF_VAR_` із секретів CI.
+
+**Чого змінні не вміють:**
+
+- не працюють у блоці `backend` (він налаштовується до читання змінних) → `-backend-config`;
+- `default` не може посилатися на ресурси чи інші змінні, лише константа → для обчислень є `locals`;
+- `var.x` лише для читання.
+
+**У модулях** змінні — це входи модуля: `type`, `description` і `validation` утворюють контракт модуля.
+
+**Домовленості:** усі змінні у `variables.tf`, імена в `snake_case`, у кожної `type` і `description`, виносити в змінні лише те, що реально змінюється.
+
 ### 8. Залежності
 
 - **Неявні:** якщо ресурс посилається на атрибут іншого (`subnet_id = azurerm_subnet.subnet.id`), Terraform сам створить їх у правильному порядку.
@@ -382,3 +458,10 @@ terraform providers              # які провайдери потрібні 
 - `data` чи `import`: коли що?
 - Як отримати subscription ID і object ID того, хто запускає Terraform?
 - Як передати значення з одного стейту в інший?
+- Як зробити змінну обов'язковою?
+- Що робить `optional()` в `object`?
+- Як працює `validation` і коли вона виконується?
+- `sensitive` чи `ephemeral`: що з них захищає стейт?
+- Чому змінні не можна використовувати в `backend`?
+- Чим `variable` відрізняється від `local`?
+- Як передати секрет у Terraform у CI?
