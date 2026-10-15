@@ -3,7 +3,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   name                              = "vm-demo-node"
   resource_group_name               = azurerm_resource_group.rg.name
   location                          = azurerm_resource_group.rg.location
-  size                              = "Standard_B2ls_v2"
+  size                              = var.vm_size
   admin_username                    = "azureuser"
   vm_agent_platform_updates_enabled = false
 

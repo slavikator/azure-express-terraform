@@ -1,7 +1,7 @@
 # 1. Resource Group (Контейнер для всіх ресурсів)
 resource "azurerm_resource_group" "rg" {
   name     = "rg-devops-demo-swe"
-  location = "swedencentral"
+  location = var.location
 }
 
 # 2. Virtual Network (Приватна мережа)
