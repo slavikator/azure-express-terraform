@@ -6,6 +6,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   size                              = var.vm_size
   admin_username                    = "azureuser"
   vm_agent_platform_updates_enabled = false
+  tags                              = local.tags
 
   custom_data = base64encode(<<-EOF
               #!/bin/bash
