@@ -24,5 +24,5 @@ resource "azurerm_subnet" "main" {
 
 moved {
   from = azurerm_subnet.subnet
-  to = azurerm_subnet.main
+  to   = azurerm_subnet.main
 }
