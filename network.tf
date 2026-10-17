@@ -15,10 +15,14 @@ resource "azurerm_virtual_network" "main" {
 }
 
 # 3. Subnet (Підмережа для нашої VM)
-resource "azurerm_subnet" "subnet" {
+resource "azurerm_subnet" "main" {
   name                 = "snet-internal"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.main.name
   address_prefixes     = ["10.0.1.0/24"]
 }
 
+moved {
+  from = azurerm_subnet.subnet
+  to = azurerm_subnet.main
+}

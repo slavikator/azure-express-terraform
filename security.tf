@@ -49,7 +49,7 @@ resource "azurerm_network_interface" "nic" {
 
   ip_configuration {
     name                          = "internal"
-    subnet_id                     = azurerm_subnet.subnet.id
+    subnet_id                     = azurerm_subnet.main.id
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.pip.id
   }
@@ -63,7 +63,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 
 # Прив'язка NSG безпосередньо до підмережі (Subnet)
 resource "azurerm_subnet_network_security_group_association" "subnet_assoc" {
-  subnet_id                 = azurerm_subnet.subnet.id
+  subnet_id                 = azurerm_subnet.main.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
