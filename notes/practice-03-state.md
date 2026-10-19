@@ -31,6 +31,7 @@ The table you need to fill in at the end:
 | ✅ | ✅ | ❌ | ? |
 | ✅ | ✅ | ✅, but a different value | ? |
 | ❌ | ✅ | ✅ | ? |
+| ❌ | ❌ | ✅ | ? |
 
 ---
 
@@ -228,6 +229,7 @@ Table:
 | ✅ | ✅ | ❌ | |
 | ✅ | ✅ | ✅, but a different value | |
 | ❌ | ✅ | ✅ | |
+| ❌ | ❌ | ✅ | |
 
 1.
 2.
