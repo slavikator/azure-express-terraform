@@ -1,95 +1,95 @@
-# Тиждень 4. Мережі Azure
+# Week 4. Azure networking
 
-Як побудована мережа в Azure і як пояснити, куди йде пакет.
+How networking is built in Azure, and how to explain where a packet goes.
 
-## Терміни
+## Terms
 
-| Абревіатура / термін | Розшифровка | Що це, одним реченням |
+| Abbreviation / term | Stands for | What it is, in one sentence |
 |---|---|---|
-| **VNet** | Virtual Network | Ізольована приватна мережа в Azure, прив'язана до одного регіону |
-| **Subnet** | | Діапазон адрес усередині VNet, куди підключаються ресурси |
-| **CIDR** | Classless Inter-Domain Routing | Запис діапазону адрес: `10.0.0.0/16` |
-| **NSG** | Network Security Group | Фаєрвол з правилами allow/deny на рівні subnet або NIC |
-| **NIC** | Network Interface Card | Мережева карта VM, через неї VM підключена до subnet |
-| **PIP** | Public IP | Публічна IP-адреса, яку прив'язують до NIC або балансувальника |
-| **LB** | Load Balancer | Балансувальник рівня L4 (TCP/UDP) |
-| **App Gateway** | Application Gateway | Балансувальник рівня L7 (HTTP), може мати WAF |
-| **WAF** | Web Application Firewall | Захист від атак на вебзастосунки (SQL injection, XSS) |
-| **NAT GW** | NAT Gateway | Вихід в інтернет для приватних ресурсів через фіксовану IP |
-| **UDR** | User-Defined Route | Власне правило маршрутизації (route table) |
-| **PE** | Private Endpoint | Приватна IP у вашій VNet для PaaS-сервісу (Storage, Key Vault) |
-| **ASG** | Application Security Group | Логічна група VM, яку можна вказати в правилі NSG замість IP |
+| **VNet** | Virtual Network | An isolated private network in Azure, tied to one region |
+| **Subnet** | | An address range inside a VNet where resources connect |
+| **CIDR** | Classless Inter-Domain Routing | Notation for an address range: `10.0.0.0/16` |
+| **NSG** | Network Security Group | A firewall with allow/deny rules at the subnet or NIC level |
+| **NIC** | Network Interface Card | A VM's network card; it connects the VM to a subnet |
+| **PIP** | Public IP | A public IP address attached to a NIC or a load balancer |
+| **LB** | Load Balancer | A layer 4 (TCP/UDP) load balancer |
+| **App Gateway** | Application Gateway | A layer 7 (HTTP) load balancer, can have a WAF |
+| **WAF** | Web Application Firewall | Protection against attacks on web apps (SQL injection, XSS) |
+| **NAT GW** | NAT Gateway | Internet egress for private resources through a fixed IP |
+| **UDR** | User-Defined Route | A custom routing rule (route table) |
+| **PE** | Private Endpoint | A private IP in your VNet for a PaaS service (Storage, Key Vault) |
+| **ASG** | Application Security Group | A logical group of VMs that can be used in an NSG rule instead of IPs |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
 ### 1. CIDR
 
-Число після `/` показує, скільки перших бітів адреси зафіксовано. IPv4 має 32 біти.
+The number after `/` shows how many leading bits of the address are fixed. IPv4 has 32 bits.
 
 ```
-10.0.0.0/16   зафіксовано 16 біт  →  2^(32−16) = 65 536 адрес
-10.0.1.0/24   зафіксовано 24 біти →  2^(32−24) =    256 адрес
+10.0.0.0/16   16 bits fixed  →  2^(32−16) = 65,536 addresses
+10.0.1.0/24   24 bits fixed  →  2^(32−24) =    256 addresses
 ```
 
-Чим більше число після `/`, тим менша мережа.
+The bigger the number after `/`, the smaller the network.
 
-| Префікс | Адрес усього | Доступно в Azure |
+| Prefix | Total addresses | Usable in Azure |
 |---|---|---|
-| `/16` | 65 536 | 65 531 |
+| `/16` | 65,536 | 65,531 |
 | `/24` | 256 | 251 |
 | `/27` | 32 | 27 |
 | `/28` | 16 | 11 |
-| `/29` | 8 | 3, найменша підмережа |
+| `/29` | 8 | 3, the smallest subnet |
 
-### 2. П'ять зарезервованих адрес
+### 2. Five reserved addresses
 
-У кожній підмережі Azure забирає 5 адрес. Для `10.0.1.0/24`:
+Azure takes 5 addresses in every subnet. For `10.0.1.0/24`:
 
-| Адреса | Для чого |
+| Address | What it's for |
 |---|---|
-| `10.0.1.0` | адреса мережі |
-| `10.0.1.1` | шлюз за замовчуванням |
-| `10.0.1.2`, `10.0.1.3` | DNS Azure |
+| `10.0.1.0` | network address |
+| `10.0.1.1` | default gateway |
+| `10.0.1.2`, `10.0.1.3` | Azure DNS |
 | `10.0.1.255` | broadcast |
 
-Тому перша VM отримує `10.0.1.4`.
+That's why the first VM gets `10.0.1.4`.
 
 ### 3. NSG
 
-Правило має: пріоритет (100–4096, менше число = вищий пріоритет), напрямок, протокол, порти, джерело, призначення, allow або deny. Перше правило, що підійшло, перемагає.
+A rule has: a priority (100–4096, a lower number = higher priority), direction, protocol, ports, source, destination, allow or deny. The first matching rule wins.
 
-Правила за замовчуванням (пріоритет 65000+, їх не видалити, можна лише перекрити):
-- **Inbound:** дозволено з VNet, дозволено від Azure Load Balancer, **решта заборонена**.
-- **Outbound:** дозволено у VNet, **дозволено в інтернет**, решта заборонена.
+Default rules (priority 65000+; they can't be deleted, only overridden):
+- **Inbound:** allowed from the VNet, allowed from Azure Load Balancer, **everything else denied**.
+- **Outbound:** allowed to the VNet, **allowed to the internet**, everything else denied.
 
-**NSG на subnet і на NIC одночасно:**
-- вхідний трафік: спочатку NSG підмережі, потім NSG карти;
-- вихідний трафік: спочатку NSG карти, потім NSG підмережі.
+**An NSG on both the subnet and the NIC:**
+- inbound traffic: first the subnet's NSG, then the NIC's NSG;
+- outbound traffic: first the NIC's NSG, then the subnet's NSG.
 
-Трафік проходить, лише якщо дозволений **обома**. У моєму проєкті NSG прив'язано і до subnet, і до NIC, тож правила збігаються.
+Traffic passes only if **both** allow it. In my project, the NSG is attached to both the subnet and the NIC, so the rules are the same.
 
-**Service tags** замість IP: `Internet`, `VirtualNetwork`, `AzureLoadBalancer`, `Storage`, `AzureCloud`.
+**Service tags** instead of IPs: `Internet`, `VirtualNetwork`, `AzureLoadBalancer`, `Storage`, `AzureCloud`.
 
 ### 4. Public IP
 
-- **Basic** SKU знято з підтримки (30 вересня 2025). Використовуйте **Standard**.
-- Standard за замовчуванням **закритий**: без NSG, що дозволяє трафік, нічого не пройде.
-- `Static` — адреса не змінюється, `Dynamic` — може змінитися після deallocate (лише Basic).
+- The **Basic** SKU is retired (September 30, 2025). Use **Standard**.
+- Standard is **closed** by default: nothing gets through without an NSG that allows the traffic.
+- `Static`: the address doesn't change. `Dynamic`: it can change after deallocation (Basic only).
 
-### 5. Балансувальники: що обрати
+### 5. Load balancers: what to choose
 
-| Сервіс | Рівень | Масштаб | Коли |
+| Service | Layer | Scope | When |
 |---|---|---|---|
-| **Load Balancer** | L4 (TCP/UDP) | регіон | будь-який TCP-трафік, VM, VMSS |
-| **Application Gateway** | L7 (HTTP/S) | регіон | маршрутизація за URL, SSL termination, WAF |
-| **Front Door** | L7 | глобальний | кілька регіонів, CDN, WAF на краю мережі |
-| **Traffic Manager** | DNS | глобальний | розподіл за DNS між регіонами |
+| **Load Balancer** | L4 (TCP/UDP) | regional | any TCP traffic, VMs, VMSS |
+| **Application Gateway** | L7 (HTTP/S) | regional | URL-based routing, SSL termination, WAF |
+| **Front Door** | L7 | global | multiple regions, CDN, WAF at the network edge |
+| **Traffic Manager** | DNS | global | DNS-based distribution between regions |
 
-### 6. VNet peering і hub-spoke
+### 6. VNet peering and hub-spoke
 
-- **Peering** з'єднує дві VNet напряму через магістраль Microsoft. Адреси не повинні перетинатися.
-- **Peering нетранзитивний:** якщо A↔B і B↔C, то A не бачить C.
-- **Hub-spoke:** центральна VNet (hub) зі спільними сервісами (фаєрвол, VPN gateway, Bastion), до неї під'єднані VNet застосунків (spokes). Spoke між собою ходять через фаєрвол у hub за допомогою UDR.
+- **Peering** connects two VNets directly over the Microsoft backbone. Address spaces must not overlap.
+- **Peering is non-transitive:** if A↔B and B↔C, A doesn't see C.
+- **Hub-spoke:** a central VNet (hub) with shared services (firewall, VPN gateway, Bastion), with application VNets (spokes) connected to it. Spokes talk to each other through the firewall in the hub, using UDRs.
 
 ```
         spoke-app
@@ -99,26 +99,26 @@ spoke-db ── hub ── on-premises (VPN / ExpressRoute)
        spoke-mgmt
 ```
 
-### 7. Доступ до PaaS-сервісів
+### 7. Access to PaaS services
 
 | | Service endpoint | Private endpoint |
 |---|---|---|
-| Що це | Трафік з subnet до сервісу йде магістраллю Azure | Сервіс отримує приватну IP у вашій subnet |
-| IP сервісу | лишається публічною | приватна, з вашої VNet |
-| Доступ з on-premises | ні | так, через VPN / ExpressRoute |
-| DNS | не потрібен | потрібна private DNS zone (`privatelink.blob.core.windows.net`) |
-| Ціна | безкоштовно | платно |
+| What it is | Traffic from the subnet to the service goes over the Azure backbone | The service gets a private IP in your subnet |
+| The service's IP | stays public | private, from your VNet |
+| Access from on-premises | no | yes, through VPN / ExpressRoute |
+| DNS | not needed | needs a private DNS zone (`privatelink.blob.core.windows.net`) |
+| Price | free | paid |
 
-Сьогодні рекомендують private endpoint.
+Today, private endpoints are recommended.
 
-### 8. Вихід в інтернет і доступ до VM
+### 8. Internet egress and access to VMs
 
-- **NAT Gateway:** вихідний трафік з приватних VM через фіксовану IP. Default outbound access для нових підмереж Azure поступово вимикає, тож явний вихід стає обов'язковим.
-- **Azure Bastion:** SSH/RDP до VM через портал, без публічної IP на VM і без відкритого порту 22.
+- **NAT Gateway:** outbound traffic from private VMs through a fixed IP. Azure is gradually turning off default outbound access for new subnets, so explicit egress is becoming mandatory.
+- **Azure Bastion:** SSH/RDP to a VM through the portal, without a public IP on the VM and without an open port 22.
 
-**У моєму проєкті** SSH (порт 22) відкритий для всього інтернету (`source_address_prefix = "*"`). Мінімальне виправлення — обмежити своєю IP.
+**In my project,** SSH (port 22) is open to the whole internet (`source_address_prefix = "*"`). The minimal fix is to restrict it to your own IP.
 
-## Terraform-приклад
+## Terraform example
 
 ```hcl
 resource "azurerm_virtual_network" "main" {
@@ -136,9 +136,9 @@ resource "azurerm_subnet" "app" {
 }
 ```
 
-`cidrsubnet(prefix, newbits, netnum)`: до `/16` додаємо 8 біт → `/24`, номер підмережі 1 → `10.0.1.0/24`.
+`cidrsubnet(prefix, newbits, netnum)`: add 8 bits to `/16` → `/24`, subnet number 1 → `10.0.1.0/24`.
 
-## Команди напам'ять
+## Commands to know by heart
 
 ```
 az network vnet list -o table
@@ -146,20 +146,20 @@ az network vnet subnet list -g <rg> --vnet-name <vnet> -o table
 az network nsg rule list -g <rg> --nsg-name <nsg> -o table
 az network nic list-effective-nsg -g <rg> -n <nic>
 az network nic show-effective-route-table -g <rg> -n <nic> -o table
-az network watcher test-ip-flow ...       # чи пропустить NSG конкретний пакет
+az network watcher test-ip-flow ...       # will the NSG let a specific packet through
 ```
 
-## Перевірка себе
+## Check yourself
 
-Намалюйте hub-spoke з NSG і поясніть, через що пройде HTTP-запит з інтернету до VM: public IP → NSG підмережі → NSG карти → VM. Порахуйте, скільки VM влізе в `/27`.
+Draw a hub-spoke network with NSGs and explain what an HTTP request from the internet passes through on its way to a VM: public IP → subnet NSG → NIC NSG → VM. Work out how many VMs fit in a `/27`.
 
-## Питання співбесіди
+## Interview questions
 
-- Скільки придатних адрес у `/28` і чому?
-- Як обробляються NSG, прикріплені і до subnet, і до NIC?
-- Які правила NSG є за замовчуванням?
-- Чому peering нетранзитивний і як це обходять?
-- Private endpoint чи service endpoint: різниця?
-- Load Balancer, Application Gateway чи Front Door: коли що?
-- Як дати VM вихід в інтернет без публічної IP?
-- Як безпечно дістатися до VM по SSH?
+- How many usable addresses are in a `/28`, and why?
+- How are NSGs attached to both the subnet and the NIC evaluated?
+- What are the default NSG rules?
+- Why is peering non-transitive, and how do people work around it?
+- Private endpoint or service endpoint: what's the difference?
+- Load Balancer, Application Gateway or Front Door: when to use which?
+- How do you give a VM internet egress without a public IP?
+- How do you safely reach a VM over SSH?

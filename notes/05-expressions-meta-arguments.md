@@ -1,19 +1,19 @@
-# Тиждень 5. Вирази та мета-аргументи
+# Week 5. Expressions and meta-arguments
 
-Як писати гнучкий код без копіпасти.
+How to write flexible code without copy-paste.
 
-## Терміни
+## Terms
 
-| Термін | Що це, одним реченням |
+| Term | What it is, in one sentence |
 |---|---|
-| **Meta-argument** | Аргумент, який працює на будь-якому ресурсі: `count`, `for_each`, `depends_on`, `lifecycle`, `provider` |
-| **`count`** | Створити N однакових копій ресурсу, адресація за індексом `[0]`, `[1]` |
-| **`for_each`** | Створити копію для кожного елемента map або set, адресація за ключем `["web"]` |
-| **`dynamic`** | Згенерувати вкладені блоки (наприклад, `security_rule`) з колекції |
-| **`lifecycle`** | Налаштування того, як Terraform створює, змінює і видаляє ресурс |
-| **Splat** | Вираз `resource.name[*].id`, що збирає атрибут з усіх копій |
+| **Meta-argument** | An argument that works on any resource: `count`, `for_each`, `depends_on`, `lifecycle`, `provider` |
+| **`count`** | Create N identical copies of a resource, addressed by index `[0]`, `[1]` |
+| **`for_each`** | Create a copy for each element of a map or set, addressed by key `["web"]` |
+| **`dynamic`** | Generate nested blocks (e.g. `security_rule`) from a collection |
+| **`lifecycle`** | Settings for how Terraform creates, changes and deletes a resource |
+| **Splat** | The expression `resource.name[*].id`, which collects an attribute from all copies |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
 ### 1. `count`
 
@@ -23,20 +23,20 @@ resource "azurerm_public_ip" "pip" {
   name                = "pip-${count.index}"
   ...
 }
-# адреси: azurerm_public_ip.pip[0], azurerm_public_ip.pip[1]
+# addresses: azurerm_public_ip.pip[0], azurerm_public_ip.pip[1]
 ```
 
-Умовне створення:
+Conditional creation:
 ```hcl
 count = var.create_bastion ? 1 : 0
 ```
 
-**Проблема `count` зі списком:**
+**The problem with `count` over a list:**
 ```hcl
 variable "names" { default = ["web", "api", "db"] }
 count = length(var.names)
 ```
-Якщо видалити `"web"`, то `api` переїде з `[1]` на `[0]`, а `db` з `[2]` на `[1]`. Terraform **пересоздасть** обидва, бо індекси змінилися.
+If you remove `"web"`, `api` moves from `[1]` to `[0]`, and `db` from `[2]` to `[1]`. Terraform will **recreate** both, because their indexes changed.
 
 ### 2. `for_each`
 
@@ -54,19 +54,19 @@ resource "azurerm_linux_virtual_machine" "vm" {
   size     = each.value
   ...
 }
-# адреси: azurerm_linux_virtual_machine.vm["web"], ...["api"]
+# addresses: azurerm_linux_virtual_machine.vm["web"], ...["api"]
 ```
 
-Видалення `web` зачепить лише `web`, бо адреса прив'язана до ключа, а не до позиції.
+Removing `web` affects only `web`, because the address is tied to the key, not the position.
 
-- `for_each` приймає **map** або **set of strings**, не list: `for_each = toset(var.names)`.
-- Ключі мають бути відомі під час `plan`, тому їх не можна брати з атрибутів, які стануть відомі лише після `apply`.
+- `for_each` takes a **map** or a **set of strings**, not a list: `for_each = toset(var.names)`.
+- The keys must be known during `plan`, so they can't come from attributes that are only known after `apply`.
 
-**Правило:** `count` для «0 або 1» і для повністю однакових копій. Для всього іншого `for_each`.
+**The rule:** `count` for "0 or 1" and for fully identical copies. `for_each` for everything else.
 
 ### 3. `dynamic`
 
-Генерує вкладені блоки всередині **одного** ресурсу:
+Generates nested blocks inside **one** resource:
 
 ```hcl
 variable "nsg_rules" {
@@ -98,15 +98,15 @@ resource "azurerm_network_security_group" "nsg" {
 }
 ```
 
-Різниця: `for_each` на ресурсі створює **кілька ресурсів**, а `dynamic` створює **кілька блоків в одному ресурсі**.
+The difference: `for_each` on a resource creates **several resources**, while `dynamic` creates **several blocks in one resource**.
 
-### 4. Вирази
+### 4. Expressions
 
 ```hcl
-# умовний вираз
+# conditional expression
 size = var.env == "prod" ? "Standard_D2s_v5" : "Standard_B1s"
 
-# for: перетворити колекцію
+# for: transform a collection
 upper_names = [for n in var.names : upper(n)]
 name_to_id  = { for k, v in azurerm_subnet.this : k => v.id }
 only_prod   = [for n in var.envs : n if n != "dev"]
@@ -115,22 +115,22 @@ only_prod   = [for n in var.envs : n if n != "dev"]
 pip_ids = azurerm_public_ip.pip[*].id
 ```
 
-### 5. Корисні функції
+### 5. Useful functions
 
-| Функція | Приклад | Результат |
+| Function | Example | Result |
 |---|---|---|
-| `merge` | `merge(local.tags, { role = "web" })` | об'єднати map |
-| `lookup` | `lookup(var.sizes, var.env, "Standard_B1s")` | значення з map або default |
+| `merge` | `merge(local.tags, { role = "web" })` | merge maps |
+| `lookup` | `lookup(var.sizes, var.env, "Standard_B1s")` | a value from a map, or a default |
 | `cidrsubnet` | `cidrsubnet("10.0.0.0/16", 8, 2)` | `10.0.2.0/24` |
-| `try` | `try(var.config.port, 80)` | значення або запасне, якщо помилка |
-| `coalesce` | `coalesce(var.name, "default")` | перше непорожнє |
+| `try` | `try(var.config.port, 80)` | the value, or a fallback if there's an error |
+| `coalesce` | `coalesce(var.name, "default")` | the first non-empty value |
 | `format` | `format("vm-%s-%02d", "web", 1)` | `vm-web-01` |
-| `jsonencode` | `jsonencode({ a = 1 })` | рядок JSON |
-| `base64encode` | для `custom_data` | |
-| `file`, `templatefile` | `templatefile("init.sh", { port = 3000 })` | зміст файлу з підстановкою |
-| `toset`, `tolist`, `tomap` | перетворення типів | |
+| `jsonencode` | `jsonencode({ a = 1 })` | a JSON string |
+| `base64encode` | for `custom_data` | |
+| `file`, `templatefile` | `templatefile("init.sh", { port = 3000 })` | file contents with substitution |
+| `toset`, `tolist`, `tomap` | type conversions | |
 
-Перевіряти вирази зручно в `terraform console`.
+`terraform console` is a convenient place to test expressions.
 
 ### 6. `lifecycle`
 
@@ -143,23 +143,23 @@ lifecycle {
 }
 ```
 
-| Аргумент | Що робить | Коли |
+| Argument | What it does | When |
 |---|---|---|
-| `create_before_destroy` | Спершу створює новий ресурс, потім видаляє старий | Мінімізувати простій при replace. Потрібні унікальні імена |
-| `prevent_destroy` | `plan` падає, якщо ресурс буде видалено | Бази даних, storage зі стейтом, Key Vault |
-| `ignore_changes` | Не реагувати на зміни вказаних атрибутів | Атрибути, які змінює хтось інший: теги від політик, образ, який деплоїть CI |
-| `replace_triggered_by` | Пересоздати ресурс, коли змінився інший ресурс | Перезапустити VM після зміни конфігурації |
+| `create_before_destroy` | Creates the new resource first, then deletes the old one | To minimize downtime on replace. Needs unique names |
+| `prevent_destroy` | `plan` fails if the resource would be deleted | Databases, the state storage, Key Vault |
+| `ignore_changes` | Ignore changes to the listed attributes | Attributes someone else changes: tags from policies, an image deployed by CI |
+| `replace_triggered_by` | Recreate the resource when another resource changes | Restart a VM after a configuration change |
 
-**У моєму проєкті:** `ignore_changes = [custom_data]` на VM. Без нього зміна тексту в `custom_data` пересоздавала б VM, бо cloud-init не можна змінити на машині, що вже працює. Але тому ж зміни тексту й не доходили до VM.
+**In my project:** `ignore_changes = [custom_data]` on the VM. Without it, changing the `custom_data` text would recreate the VM, because cloud-init can't be changed on a machine that's already running. But for the same reason, text changes never reached the VM.
 
-### 7. Перевірки
+### 7. Checks
 
 ```hcl
 variable "env" {
   type = string
   validation {
     condition     = contains(["dev", "prod"], var.env)
-    error_message = "env має бути dev або prod."
+    error_message = "env must be dev or prod."
   }
 }
 
@@ -168,27 +168,27 @@ resource "azurerm_linux_virtual_machine" "vm" {
   lifecycle {
     precondition {
       condition     = var.env != "prod" || var.vm_size != "Standard_B1s"
-      error_message = "Для prod потрібна більша VM."
+      error_message = "prod needs a bigger VM."
     }
   }
 }
 ```
 
-- `validation`: перевірка вхідної змінної.
-- `precondition`: перевірка перед створенням ресурсу.
-- `postcondition`: перевірка після, з доступом до `self`.
+- `validation`: a check on an input variable.
+- `precondition`: a check before the resource is created.
+- `postcondition`: a check afterwards, with access to `self`.
 
-## Перевірка себе
+## Check yourself
 
-Перепишіть NSG свого проєкту через `dynamic` з map у змінній. Створіть дві VM через `for_each`. Видаліть одну з map і переконайтеся, що `plan` чіпає лише її.
+Rewrite your project's NSG with `dynamic` from a map in a variable. Create two VMs with `for_each`. Remove one from the map and make sure `plan` touches only that one.
 
-## Питання співбесіди
+## Interview questions
 
-- `count` проти `for_each`: різниця і коли що?
-- Чому видалення елемента зі списку в `count` зачіпає інші ресурси?
-- `dynamic` проти `for_each` на ресурсі?
-- Коли доречний `ignore_changes`? Наведіть приклад.
-- Що робить `create_before_destroy` і які в нього обмеження?
-- Як захистити критичний ресурс від випадкового видалення?
-- Що робить `replace_triggered_by`?
-- Чому ключі `for_each` мають бути відомі під час `plan`?
+- `count` vs `for_each`: what's the difference, and when to use which?
+- Why does removing an item from a `count` list affect other resources?
+- `dynamic` vs `for_each` on a resource?
+- When is `ignore_changes` appropriate? Give an example.
+- What does `create_before_destroy` do, and what are its limitations?
+- How do you protect a critical resource from accidental deletion?
+- What does `replace_triggered_by` do?
+- Why must `for_each` keys be known during `plan`?

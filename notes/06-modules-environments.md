@@ -1,36 +1,36 @@
-# Тиждень 6. Модулі та середовища
+# Week 6. Modules and environments
 
-Як організувати код так, як у реальній команді.
+How to organize code the way a real team does.
 
-## Терміни
+## Terms
 
-| Термін | Що це, одним реченням |
+| Term | What it is, in one sentence |
 |---|---|
-| **Module** | Папка з файлами `.tf`, яку можна викликати з іншого коду з параметрами |
-| **Root module** | Папка, де ви запускаєте `terraform`. Має бекенд і провайдер |
-| **Child module** | Модуль, який викликають з root через блок `module` |
-| **Module source** | Звідки брати модуль: локальна папка, git, Terraform Registry |
-| **AVM** | Azure Verified Modules, офіційні модулі Microsoft для Azure |
-| **Workspace** | Кілька окремих стейтів для однієї конфігурації |
-| **Environment** | Середовище: dev, staging, prod |
-| **DRY** | Don't Repeat Yourself, не повторюватися |
-| **Terragrunt** | Обгортка над Terraform для DRY-конфігурації середовищ і бекендів |
+| **Module** | A folder of `.tf` files that other code can call with parameters |
+| **Root module** | The folder where you run `terraform`. It has the backend and the provider |
+| **Child module** | A module called from the root through a `module` block |
+| **Module source** | Where to get a module from: a local folder, git, the Terraform Registry |
+| **AVM** | Azure Verified Modules, Microsoft's official modules for Azure |
+| **Workspace** | Several separate states for one configuration |
+| **Environment** | dev, staging, prod |
+| **DRY** | Don't Repeat Yourself |
+| **Terragrunt** | A wrapper around Terraform for DRY environment and backend configuration |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
-### 1. Структура модуля
+### 1. Module structure
 
 ```
 modules/network/
-├── main.tf         # ресурси
-├── variables.tf    # входи
-├── outputs.tf      # виходи
-└── versions.tf     # required_providers (без блоку provider і без backend)
+├── main.tf         # resources
+├── variables.tf    # inputs
+├── outputs.tf      # outputs
+└── versions.tf     # required_providers (no provider block and no backend)
 ```
 
-Модуль **не** містить блоку `backend`, а блок `provider` у ньому вважається поганою практикою. Їх задає root module.
+A module does **not** contain a `backend` block, and a `provider` block in it is considered bad practice. The root module sets them.
 
-### 2. Виклик модуля
+### 2. Calling a module
 
 ```hcl
 module "network" {
@@ -44,35 +44,35 @@ module "network" {
 
 module "vm" {
   source    = "./modules/vm"
-  subnet_id = module.network.subnet_id    # вихід одного модуля → вхід іншого
+  subnet_id = module.network.subnet_id    # one module's output → another's input
 }
 ```
 
-Після додавання або зміни `source` потрібен `terraform init`.
+After adding or changing a `source`, you need to run `terraform init`.
 
-### 3. Джерела модулів
+### 3. Module sources
 
 ```hcl
-source = "./modules/network"                                          # локально
-source = "git::https://github.com/org/tf-modules.git//network?ref=v1.2.0"   # git з тегом
+source = "./modules/network"                                          # local
+source = "git::https://github.com/org/tf-modules.git//network?ref=v1.2.0"   # git with a tag
 source = "Azure/avm-res-network-virtualnetwork/azurerm"               # Registry
-version = "~> 0.4"                                                    # лише для Registry
+version = "~> 0.4"                                                    # Registry only
 ```
 
-- Для git версію фіксують через `?ref=<тег>`.
-- Для Registry через `version`.
-- Без фіксації версії оновлення модуля може зламати всі середовища одночасно.
+- For git, the version is pinned with `?ref=<tag>`.
+- For the Registry, with `version`.
+- Without a pinned version, a module update can break all environments at once.
 
-### 4. Що віддавати в outputs
+### 4. What to expose in outputs
 
-- **Так:** ID, імена, адреси, які потрібні іншим модулям (`subnet_id`, `vnet_id`).
-- **Ні:** весь ресурс цілком, секрети без `sensitive = true`, проміжні дані.
+- **Yes:** IDs, names, addresses that other modules need (`subnet_id`, `vnet_id`).
+- **No:** the whole resource, secrets without `sensitive = true`, intermediate data.
 
-Входи модуля мають бути мінімальними й зрозумілими: краще 5 змінних з типами та описом, ніж 30 «на всякий випадок».
+A module's inputs should be minimal and clear: 5 variables with types and descriptions are better than 30 "just in case".
 
-### 5. Перенесення ресурсів у модуль без пересоздання
+### 5. Moving resources into a module without recreating them
 
-Ресурс змінює адресу з `azurerm_virtual_network.vnet` на `module.network.azurerm_virtual_network.this`. Без підказки Terraform видалить старий і створить новий.
+The resource's address changes from `azurerm_virtual_network.vnet` to `module.network.azurerm_virtual_network.this`. Without a hint, Terraform deletes the old one and creates a new one.
 
 ```hcl
 moved {
@@ -81,23 +81,23 @@ moved {
 }
 ```
 
-`plan` має показати `has moved to`, а не `destroy`.
+`plan` should show `has moved to`, not `destroy`.
 
-### 6. Середовища: три підходи
+### 6. Environments: three approaches
 
 **Workspaces**
 ```
 terraform workspace new prod
 terraform workspace select prod
 ```
-- Один код, окремі стейти (`env:/prod/...`).
-- Мінуси: легко зробити `apply` не в тому workspace, однаковий бекенд і права для всіх середовищ, різницю між середовищами доводиться писати через `terraform.workspace` у коді.
+- One codebase, separate states (`env:/prod/...`).
+- Downsides: it's easy to `apply` in the wrong workspace, all environments share the same backend and permissions, and differences between environments have to be written with `terraform.workspace` in the code.
 
-**Окремі директорії**
+**Separate directories**
 ```
 envs/
 ├── dev/
-│   ├── main.tf          # викликає modules/*
+│   ├── main.tf          # calls modules/*
 │   ├── backend.tf       # key = "dev.tfstate"
 │   └── terraform.tfvars
 └── prod/
@@ -108,46 +108,46 @@ modules/
 ├── network/
 └── vm/
 ```
-- Явно видно, куди йде `apply`. Можна дати різні права і навіть різні підписки.
-- Мінус: дублювання `main.tf` між середовищами (саме це вирішує Terragrunt).
+- It's obvious where `apply` goes. You can give different permissions and even different subscriptions.
+- Downside: `main.tf` is duplicated between environments (this is exactly what Terragrunt solves).
 
-**Один код + різні tfvars і backend-config**
+**One codebase + different tfvars and backend-config**
 ```
 terraform init -backend-config=env/prod.backend.hcl
 terraform apply -var-file=env/prod.tfvars
 ```
-- Мало коду, але легко переплутати файли.
+- Little code, but it's easy to mix up files.
 
-**Що обирають у командах:** найчастіше окремі директорії або окремі репозиторії для prod, з модулями в окремому репозиторії з тегами. Workspaces радять для тимчасових копій (наприклад, середовище для PR), а не для dev/prod.
+**What teams choose:** most often separate directories, or separate repositories for prod, with modules in their own repository with tags. Workspaces are recommended for temporary copies (e.g. an environment per PR), not for dev/prod.
 
-### 7. Як розділяти стейти
+### 7. How to split states
 
-- Окремий стейт для кожного середовища.
-- Часто також окремі стейти за шарами: мережа, бази, застосунки. Тоді помилка в застосунку не зачепить мережу, і `plan` працює швидше.
-- Читання виходів іншого стейту: `data "terraform_remote_state"`.
+- A separate state for each environment.
+- Often also separate states by layer: network, databases, applications. Then a mistake in an application won't affect the network, and `plan` runs faster.
+- To read another state's outputs: `data "terraform_remote_state"`.
 
-## Команди напам'ять
+## Commands to know by heart
 
 ```
-terraform init                     # після зміни source модуля
-terraform get -update              # оновити модулі
+terraform init                     # after changing a module source
+terraform get -update              # update modules
 terraform workspace list
 terraform workspace new <name>
 terraform workspace select <name>
 terraform state list | grep module.network
 ```
 
-## Перевірка себе
+## Check yourself
 
-Винесіть мережу свого проєкту в `modules/network`, а VM у `modules/vm`. Перенесіть існуючі ресурси блоками `moved` так, щоб `plan` не показав жодного `destroy`. Підніміть dev і prod з різними стейтами.
+Move your project's network into `modules/network` and the VM into `modules/vm`. Move the existing resources with `moved` blocks so that `plan` shows no `destroy`. Bring up dev and prod with separate states.
 
-## Питання співбесіди
+## Interview questions
 
-- Що таке модуль і навіщо він потрібен?
-- Чому в child module не пишуть `backend` і `provider`?
-- Workspaces чи окремі директорії для dev/prod: що оберете і чому?
-- Як версіонувати модулі для кількох команд?
-- Як перенести ресурси в модуль без пересоздання?
-- Що має бути в outputs модуля?
-- Як розділити один великий стейт і навіщо?
-- Що таке Terragrunt і яку проблему він вирішує?
+- What is a module, and why is it needed?
+- Why don't you write `backend` and `provider` in a child module?
+- Workspaces or separate directories for dev/prod: which would you choose, and why?
+- How do you version modules for several teams?
+- How do you move resources into a module without recreating them?
+- What should go into a module's outputs?
+- How do you split one large state, and why?
+- What is Terragrunt, and what problem does it solve?

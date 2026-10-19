@@ -1,28 +1,28 @@
-# Практика тижня 1. «Обмежений робот»
+# Week 1 practice: "The restricted robot"
 
-**Мета:** створити service principal, який може працювати лише в одній resource group, і переконатися, що за її межами він безсилий.
+**Goal:** create a service principal that can only work in one resource group, and make sure it's powerless outside it.
 
-**Теми:** service principal, app registration, RBAC, scope, activity log.
+**Topics:** service principal, app registration, RBAC, scope, activity log.
 
-**Час:** 30–40 хвилин. **Вартість:** безкоштовно (resource group і VNet не тарифікуються).
+**Time:** 30–40 minutes. **Cost:** free (resource groups and VNets aren't billed).
 
 ---
 
-## Крок 1. Підготовка
+## Step 1. Preparation
 
-Створіть resource group для вправи:
+Create a resource group for the exercise:
 
 ```
 az group create -n rg-practice-rbac -l swedencentral
 ```
 
-Збережіть ID підписки у змінну:
+Save the subscription ID in a variable:
 
 ```
 SUB_ID=$(az account show --query id -o tsv)
 ```
 
-## Крок 2. Service principal з роллю Reader лише на цю групу
+## Step 2. A service principal with the Reader role on this group only
 
 ```
 az ad sp create-for-rbac --name sp-practice \
@@ -30,31 +30,31 @@ az ad sp create-for-rbac --name sp-practice \
   --scopes /subscriptions/$SUB_ID/resourceGroups/rg-practice-rbac
 ```
 
-Збережіть із виводу `appId`, `password` і `tenant`. Пароль показується лише один раз.
+Save `appId`, `password` and `tenant` from the output. The password is shown only once.
 
-> ❓ **1.** Які два об'єкти щойно створилися в Entra ID?
+> ❓ **1.** Which two objects were just created in Entra ID?
 
-## Крок 3. Увійдіть як робот
+## Step 3. Sign in as the robot
 
 ```
 az login --service-principal -u <appId> -p <password> --tenant <tenant>
 az account show
 ```
 
-> ❓ **2.** Що тепер показує поле `user.type`?
+> ❓ **2.** What does the `user.type` field show now?
 
-## Крок 4. Перевірте права Reader
+## Step 4. Check the Reader permissions
 
 ```
 az group list -o table
 az network vnet create -g rg-practice-rbac -n vnet-test --address-prefix 10.10.0.0/16
 ```
 
-> ❓ **3.** Яку групу бачить робот у `az group list` і чому не бачить решту?
+> ❓ **3.** Which group does the robot see in `az group list`, and why doesn't it see the others?
 >
-> ❓ **4.** Що сталося зі створенням VNet і яка помилка?
+> ❓ **4.** What happened when creating the VNet, and what was the error?
 
-## Крок 5. Поверніться до себе і підвищте роль
+## Step 5. Switch back to yourself and raise the role
 
 ```
 az login
@@ -62,57 +62,57 @@ az role assignment create --assignee <appId> --role Contributor \
   --scope /subscriptions/$SUB_ID/resourceGroups/rg-practice-rbac
 ```
 
-## Крок 6. Знову як робот
+## Step 6. As the robot again
 
-Увійдіть як SP (крок 3) і повторіть створення VNet. Потім спробуйте створити групу:
+Sign in as the SP (step 3) and try creating the VNet again. Then try to create a group:
 
 ```
 az group create -n rg-should-fail -l swedencentral
 ```
 
-> ❓ **5.** Чому VNet створилася, а група ні, хоча роль Contributor?
+> ❓ **5.** Why was the VNet created but the group wasn't, even though the role is Contributor?
 
-## Крок 7. Перевірте слід у журналі
+## Step 7. Check the trail in the log
 
-Поверніться до себе (`az login`) і знайдіть, хто створив VNet:
+Switch back to yourself (`az login`) and find out who created the VNet:
 
 ```
 az monitor activity-log list -g rg-practice-rbac --offset 1h \
   --query "[].{time:eventTimestamp, op:operationName.value, status:status.value, caller:caller}" -o table
 ```
 
-> ❓ **6.** Що стоїть у `caller` для створення VNet? Чий це ID: `appId` чи object ID?
+> ❓ **6.** What's in `caller` for the VNet creation? Whose ID is it: the `appId` or the object ID?
 
-## Крок 8. Прибирання
+## Step 8. Cleanup
 
-Видаліть групу та app registration (разом з нею видалиться і SP):
+Delete the group and the app registration (the SP is deleted along with it):
 
 ```
 az group delete -n rg-practice-rbac --yes
 az ad app delete --id <appId>
 ```
 
-Перевірте, що роботів з роллю не лишилося:
+Check that no robots with roles are left:
 
 ```
 az role assignment list --all \
   --query "[?principalType=='ServicePrincipal'].{id:principalName, role:roleDefinitionName, scope:scope}" -o table
 ```
 
-> ❓ **7.** Чи лишилися «осиротілі» призначення ролі після видалення SP?
+> ❓ **7.** Were any "orphaned" role assignments left after the SP was deleted?
 
 ---
 
-## Результат
+## Outcome
 
-Після вправи ви маєте вміти без підглядання пояснити:
+After the exercise you should be able to explain, without looking:
 
-- різницю між Reader і Contributor;
-- що таке scope і як вона обмежує права;
-- чому Contributor на RG не може створити нову RG;
-- як знайти через activity log, хто що зробив.
+- the difference between Reader and Contributor;
+- what a scope is and how it limits permissions;
+- why a Contributor on an RG can't create a new RG;
+- how to find out who did what through the activity log.
 
-## Мої відповіді
+## My answers
 
 1.
 2.

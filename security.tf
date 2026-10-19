@@ -1,4 +1,4 @@
-# 1. Public IP (Зовнішній IP)
+# 1. Public IP (external IP)
 resource "azurerm_public_ip" "pip" {
   name                = "pip-demo-vm"
   location            = azurerm_resource_group.rg.location
@@ -8,7 +8,7 @@ resource "azurerm_public_ip" "pip" {
   tags                = local.tags
 }
 
-# 2. Network Security Group (Фаєрвол)
+# 2. Network Security Group (firewall)
 resource "azurerm_network_security_group" "nsg" {
   name                = "nsg-demo"
   location            = azurerm_resource_group.rg.location
@@ -40,7 +40,7 @@ resource "azurerm_network_security_group" "nsg" {
   }
 }
 
-# 3. Network Interface (Мережева карта)
+# 3. Network Interface (network card)
 resource "azurerm_network_interface" "nic" {
   name                = "nic-demo-vm"
   location            = azurerm_resource_group.rg.location
@@ -55,13 +55,13 @@ resource "azurerm_network_interface" "nic" {
   }
 }
 
-# Прив'язуємо NSG до Network Interface
+# Attach the NSG to the network interface
 resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_interface_id      = azurerm_network_interface.nic.id
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# Прив'язка NSG безпосередньо до підмережі (Subnet)
+# Attach the NSG directly to the subnet
 resource "azurerm_subnet_network_security_group_association" "subnet_assoc" {
   subnet_id                 = azurerm_subnet.main.id
   network_security_group_id = azurerm_network_security_group.nsg.id

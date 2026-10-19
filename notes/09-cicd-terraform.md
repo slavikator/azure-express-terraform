@@ -1,85 +1,85 @@
-# Тиждень 9. CI/CD для Terraform
+# Week 9. CI/CD for Terraform
 
-Пайплайн, який не страшно показати на співбесіді.
+A pipeline you're not afraid to show in an interview.
 
-## Терміни
+## Terms
 
-| Абревіатура / термін | Розшифровка | Що це, одним реченням |
+| Abbreviation / term | Stands for | What it is, in one sentence |
 |---|---|---|
-| **CI** | Continuous Integration | Автоматична перевірка кожної зміни: формат, валідація, план |
-| **CD** | Continuous Delivery / Deployment | Автоматичне застосування змін (Delivery — з ручним підтвердженням, Deployment — без) |
-| **PR** | Pull Request | Запит на злиття гілки, місце для review |
-| **GitOps** | | Git як єдине джерело правди: усе змінюється лише через merge |
-| **Plan file** | | Збережений план (`plan -out`), який `apply` виконає без змін |
-| **Environment** | GitHub environment | Захищене середовище з правилами: reviewers, секрети, гілки |
-| **Drift detection** | | Регулярна перевірка, чи не змінили інфраструктуру поза Terraform |
-| **SAST** | Static Application Security Testing | Статичний аналіз коду на вразливості (checkov, trivy) |
+| **CI** | Continuous Integration | An automatic check of every change: format, validation, plan |
+| **CD** | Continuous Delivery / Deployment | Automatically applying changes (Delivery with manual approval, Deployment without) |
+| **PR** | Pull Request | A request to merge a branch, the place for review |
+| **GitOps** | | Git as the single source of truth: everything changes only through a merge |
+| **Plan file** | | A saved plan (`plan -out`) that `apply` executes unchanged |
+| **Environment** | GitHub environment | A protected environment with rules: reviewers, secrets, branches |
+| **Drift detection** | | A regular check of whether the infrastructure was changed outside Terraform |
+| **SAST** | Static Application Security Testing | Static analysis of code for vulnerabilities (checkov, trivy) |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
-### 1. Типовий процес
+### 1. A typical process
 
 ```
-гілка → PR → CI: fmt, validate, lint, security scan, plan → коментар з планом у PR
-       → review → merge у main → CD: plan -out → підтвердження → apply цього плану
+branch → PR → CI: fmt, validate, lint, security scan, plan → comment with the plan on the PR
+       → review → merge into main → CD: plan -out → approval → apply that plan
 ```
 
-- На PR **ніколи** не робиться `apply`.
-- Після merge застосовують саме той план, який переглянули.
+- A PR **never** runs `apply`.
+- After merge, you apply exactly the plan that was reviewed.
 
-### 2. Чому `plan -out`
+### 2. Why `plan -out`
 
-Без збереженого плану `apply` будує план заново. Якщо між review і apply хтось змінив інфраструктуру або вийшла нова версія провайдера, застосується **не те**, що переглядали.
+Without a saved plan, `apply` builds the plan again. If someone changed the infrastructure, or a new provider version came out between review and apply, it will apply **something other** than what was reviewed.
 
 ```
 terraform plan -out=tfplan -input=false
-terraform show -no-color tfplan > plan.txt    # для коментаря в PR
-terraform apply -input=false tfplan            # без -auto-approve, план уже затверджено
+terraform show -no-color tfplan > plan.txt    # for the PR comment
+terraform apply -input=false tfplan            # no -auto-approve; the plan is already approved
 ```
 
-Файл плану містить секрети, тому зберігайте його як artifact з коротким строком життя.
+The plan file contains secrets, so store it as an artifact with a short retention period.
 
-### 3. Exit-коди для автоматизації
+### 3. Exit codes for automation
 
 `terraform plan -detailed-exitcode`:
 
-| Код | Значення |
+| Code | Meaning |
 |---|---|
-| `0` | змін немає |
-| `1` | помилка |
-| `2` | є зміни |
+| `0` | no changes |
+| `1` | error |
+| `2` | there are changes |
 
-Так будують drift detection: щоночі запуск `plan`, код `2` означає, що інфраструктуру змінили поза Terraform.
+This is how drift detection is built: run `plan` every night; code `2` means the infrastructure was changed outside Terraform.
 
-### 4. Захист від паралельних запусків
+### 4. Preventing parallel runs
 
-Два одночасні `apply` впруться в state lock, і один упаде. Краще, щоб вони взагалі не запускалися одночасно:
+Two simultaneous `apply` runs will hit the state lock, and one will fail. It's better if they never run at the same time:
 
 ```yaml
 concurrency:
   group: terraform-prod
-  cancel-in-progress: false    # не переривати apply посередині
+  cancel-in-progress: false    # don't interrupt an apply halfway
 ```
 
 ### 5. GitHub environments
 
-- **Required reviewers:** job чекає, поки хтось натисне Approve.
-- **Deployment branches:** apply в prod лише з `main`.
-- **Секрети середовища:** окремі облікові дані для dev і prod.
-- OIDC subject можна прив'язати до environment: `repo:<owner>/<repo>:environment:production`.
+- **Required reviewers:** the job waits until someone clicks Approve.
+- **Deployment branches:** apply to prod only from `main`.
+- **Environment secrets:** separate credentials for dev and prod.
+- The OIDC subject can be tied to an environment: `repo:<owner>/<repo>:environment:production`.
 
-### 6. Перевірки в CI
+### 6. Checks in CI
 
-| Інструмент | Що перевіряє |
+| Tool | What it checks |
 |---|---|
-| `terraform fmt -check` | форматування |
-| `terraform validate` | синтаксис і типи |
-| **tflint** | помилки, які пропускає validate: неіснуючі розміри VM, застарілі аргументи, стиль |
-| **checkov** / **trivy** | безпека: відкриті порти, публічні storage, вимкнене шифрування |
-| **Infracost** | вартість змін у PR |
-| `terraform test` | тести модулів (Terraform 1.6+) |
+| `terraform fmt -check` | formatting |
+| `terraform validate` | syntax and types |
+| **tflint** | errors validate misses: nonexistent VM sizes, deprecated arguments, style |
+| **checkov** / **trivy** | security: open ports, public storage, disabled encryption |
+| **Infracost** | the cost of changes in the PR |
+| `terraform test` | module tests (Terraform 1.6+) |
 
-### 7. Приклад workflow
+### 7. Example workflow
 
 ```yaml
 name: terraform
@@ -121,7 +121,7 @@ jobs:
     needs: plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production          # тут чекає на підтвердження
+    environment: production          # waits for approval here
     concurrency:
       group: terraform-prod
       cancel-in-progress: false
@@ -135,32 +135,32 @@ jobs:
       - run: terraform apply -input=false tfplan
 ```
 
-### 8. Уроки з мого проєкту
+### 8. Lessons from my project
 
-| Що сталося | Чому | Як запобігти |
+| What happened | Why | How to prevent it |
 |---|---|---|
-| CI висів на `init` | порожній блок `backend`, Terraform чекав вводу | `-input=false` на всіх командах |
-| Пуш конспекту підняв VM після `destroy` | `apply` при кожному пуші в main | `apply` лише вручну або через environment з підтвердженням; `paths` фільтр |
-| Apply впав посередині (баг провайдера) | провайдер без верхньої межі версії | фіксувати версії, комітити lock-файл |
+| CI hung on `init` | an empty `backend` block; Terraform waited for input | `-input=false` on every command |
+| Pushing notes brought the VM back after `destroy` | `apply` on every push to main | `apply` only manually or through an environment with approval; a `paths` filter |
+| Apply failed halfway (a provider bug) | a provider with no upper version bound | pin versions, commit the lock file |
 
-Якщо apply впав посередині: не панікувати, запустити `plan`. Terraform записує в стейт усе, що встиг створити, і план покаже, що лишилося.
+If an apply fails halfway: don't panic, run `plan`. Terraform writes everything it managed to create to the state, and the plan shows what's left.
 
 ### 9. Azure DevOps Pipelines
 
-На Azure-позиціях часто питають і про нього.
+Azure roles often ask about it too.
 
 | Azure DevOps | GitHub Actions |
 |---|---|
 | Pipeline (`azure-pipelines.yml`) | Workflow (`.github/workflows/*.yml`) |
 | Stage → Job → Step | Job → Step |
-| Service connection | Секрети або OIDC + `azure/login` |
+| Service connection | Secrets, or OIDC + `azure/login` |
 | Variable group, Library | Secrets, Variables |
-| Environment з approvals | Environment з required reviewers |
+| Environment with approvals | Environment with required reviewers |
 | Agent pool (Microsoft-hosted / self-hosted) | Runner (GitHub-hosted / self-hosted) |
 
-Service connection в Azure DevOps теж підтримує workload identity federation, без секретів.
+A service connection in Azure DevOps also supports workload identity federation, with no secrets.
 
-## Команди напам'ять
+## Commands to know by heart
 
 ```
 terraform plan -out=tfplan -input=false
@@ -172,18 +172,18 @@ gh run watch
 gh run view --log-failed
 ```
 
-## Перевірка себе
+## Check yourself
 
-Перебудуйте свій workflow: `plan` на PR з коментарем, `apply` після merge з підтвердженням через environment `production`, артефакт з планом, `concurrency`, `tflint` і `checkov`. Додайте щоденний drift detection.
+Rebuild your workflow: `plan` on PR with a comment, `apply` after merge with approval through the `production` environment, the plan as an artifact, `concurrency`, `tflint` and `checkov`. Add daily drift detection.
 
-## Питання співбесіди
+## Interview questions
 
-- Як виглядає ваш процес змін інфраструктури від гілки до prod?
-- Чому apply має застосовувати збережений план, а не новий?
-- Як уникнути двох одночасних apply?
-- Apply впав посередині. Що робити?
-- Як виявляти drift?
-- Які перевірки ви запускаєте в CI для Terraform?
-- Як GitHub Actions автентифікується в Azure без пароля?
-- GitHub Actions чи Azure DevOps: що знаєте про обидва?
-- Як розділити права для plan і apply?
+- What does your process for infrastructure changes look like, from branch to prod?
+- Why should apply use the saved plan rather than a new one?
+- How do you prevent two applies running at the same time?
+- Apply failed halfway. What do you do?
+- How do you detect drift?
+- Which checks do you run in CI for Terraform?
+- How does GitHub Actions authenticate to Azure without a password?
+- GitHub Actions or Azure DevOps: what do you know about both?
+- How do you split permissions between plan and apply?

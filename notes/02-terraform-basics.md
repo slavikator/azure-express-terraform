@@ -1,59 +1,59 @@
-# Тиждень 2. Основи Terraform
+# Week 2. Terraform basics
 
-Як писати конфігурацію: ресурси, змінні, залежності, версії провайдерів.
+How to write configuration: resources, variables, dependencies, provider versions.
 
-## Терміни
+## Terms
 
-| Термін | Що це, одним реченням |
+| Term | What it is, in one sentence |
 |---|---|
-| **IaC** | Infrastructure as Code: інфраструктура описана в коді, а не створена руками |
-| **HCL** | HashiCorp Configuration Language, мова файлів `.tf` |
-| **Provider** | Плагін, який перекладає ресурси Terraform у виклики API (тут `azurerm`) |
-| **Resource** | Об'єкт, яким Terraform керує: створює, змінює, видаляє |
-| **Data source** | Читання існуючого об'єкта, яким Terraform не керує |
-| **Variable** | Вхідний параметр конфігурації |
-| **Local** | Обчислене значення для повторного використання всередині конфігурації |
-| **Output** | Значення, яке конфігурація віддає назовні |
-| **Lock file** | `.terraform.lock.hcl`, фіксує точні версії провайдерів і їхні хеші |
-| **Declarative** | Ви описуєте бажаний результат, а не кроки. Terraform сам вирішує, що зробити |
+| **IaC** | Infrastructure as Code: infrastructure is described in code, not created by hand |
+| **HCL** | HashiCorp Configuration Language, the language of `.tf` files |
+| **Provider** | A plugin that translates Terraform resources into API calls (here `azurerm`) |
+| **Resource** | An object Terraform manages: creates, changes, deletes |
+| **Data source** | Reading an existing object that Terraform doesn't manage |
+| **Variable** | An input parameter of the configuration |
+| **Local** | A computed value for reuse inside the configuration |
+| **Output** | A value the configuration exposes to the outside |
+| **Lock file** | `.terraform.lock.hcl`, pins exact provider versions and their hashes |
+| **Declarative** | You describe the desired result, not the steps. Terraform decides what to do |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
-### 1. Цикл роботи
+### 1. The workflow
 
 ```
 init  →  validate  →  plan  →  apply  →  destroy
 ```
 
-| Команда | Що робить |
+| Command | What it does |
 |---|---|
-| `init` | Завантажує провайдери і модулі, підключає бекенд. Запускається першою і після змін у провайдерах, модулях чи бекенді |
-| `validate` | Перевіряє синтаксис і типи. Не звертається до Azure |
-| `fmt` | Форматує код за стандартом. `fmt -check` у CI падає, якщо код не відформатований |
-| `plan` | Порівнює код, стейт і реальний Azure. Показує, що буде змінено |
-| `apply` | Виконує план |
-| `destroy` | Видаляє все, що є в стейті |
+| `init` | Downloads providers and modules, connects the backend. Run it first, and after changes to providers, modules or the backend |
+| `validate` | Checks syntax and types. Doesn't contact Azure |
+| `fmt` | Formats code to the standard style. `fmt -check` in CI fails if the code isn't formatted |
+| `plan` | Compares the code, the state and real Azure. Shows what will change |
+| `apply` | Executes the plan |
+| `destroy` | Deletes everything in the state |
 
-### 2. Символи в плані
+### 2. Symbols in the plan
 
-| Символ | Значення |
+| Symbol | Meaning |
 |---|---|
-| `+` | створити |
-| `-` | видалити |
-| `~` | змінити на місці (update in-place) |
-| `-/+` | видалити і створити заново (replace). Небезпечно: дані на ресурсі зникнуть |
-| `<=` | прочитати data source |
+| `+` | create |
+| `-` | delete |
+| `~` | change in place (update in-place) |
+| `-/+` | delete and create again (replace). Dangerous: data on the resource will be lost |
+| `<=` | read a data source |
 
-Рядок `# forces replacement` показує, який саме атрибут змушує Terraform пересоздати ресурс.
+The `# forces replacement` line shows which attribute forces Terraform to recreate the resource.
 
-Як дізнатися заздалегідь: у документації ресурсу на registry.terraform.io такі аргументи позначені *«Changing this forces a new resource to be created»*.
+How to know in advance: in the resource's documentation on registry.terraform.io, such arguments are marked *"Changing this forces a new resource to be created"*.
 
-| Зміна | Результат |
+| Change | Result |
 |---|---|
-| `name`, `location` | `-/+`, пересоздання |
-| `tags`, `size` VM | `~`, зміна на місці |
+| `name`, `location` | `-/+`, recreation |
+| `tags`, VM `size` | `~`, change in place |
 
-### 3. Версії провайдерів
+### 3. Provider versions
 
 ```hcl
 terraform {
@@ -67,87 +67,87 @@ terraform {
 }
 ```
 
-| Обмеження | Що дозволяє |
+| Constraint | What it allows |
 |---|---|
-| `= 3.117.1` | лише цю версію |
-| `~> 3.0` | `3.x`, але не `4.0` |
-| `~> 3.117.0` | `3.117.x`, але не `3.118` |
-| `>= 3.118.0` | будь-яку новішу, включно з `4.x`, `5.x` |
+| `= 3.117.1` | only this version |
+| `~> 3.0` | `3.x`, but not `4.0` |
+| `~> 3.117.0` | `3.117.x`, but not `3.118` |
+| `>= 3.118.0` | any newer version, including `4.x`, `5.x` |
 
-**Історія з мого проєкту:** обмеження `>= 3.118.0` підтягнуло azurerm 5.8.0, у якому був баг з видаленням Container Apps. З `~> 3.0` цього б не сталося.
+**A story from my project:** the constraint `>= 3.118.0` pulled in azurerm 5.8.0, which had a bug with deleting Container Apps. With `~> 3.0` this wouldn't have happened.
 
-### 4. Lock-файл
+### 4. The lock file
 
-`init` записує в `.terraform.lock.hcl` точну версію кожного провайдера і хеші. Наступний `init` бере саме ці версії, навіть якщо вийшли новіші.
+`init` writes the exact version of each provider and its hashes to `.terraform.lock.hcl`. The next `init` uses exactly those versions, even if newer ones have been released.
 
-- Lock-файл **комітять**, щоб у всіх (у вас, у колег, у CI) були однакові версії.
-- Оновити версії свідомо: `terraform init -upgrade`.
-- У моєму проєкті lock-файл був у `.gitignore`. Через це локально стояла 3.117.1, а CI щоразу брав найновішу.
+- The lock file is **committed**, so everyone (you, colleagues, CI) has the same versions.
+- To upgrade versions on purpose: `terraform init -upgrade`.
+- In my project, the lock file was in `.gitignore`. Because of that, 3.117.1 was installed locally, while CI took the newest version every time.
 
-#### Що всередині (мій файл)
+#### What's inside (my file)
 
 ```hcl
 provider "registry.terraform.io/hashicorp/azurerm" {
-  version     = "3.117.1"          # точна версія
-  constraints = "~> 3.0"           # обмеження з required_providers
+  version     = "3.117.1"          # exact version
+  constraints = "~> 3.0"           # constraint from required_providers
   hashes = [
-    "h1:j6wnjp...=",               # 1 хеш h1
-    "zh:0c5136...",                # 12 хешів zh
+    "h1:j6wnjp...=",               # 1 h1 hash
+    "zh:0c5136...",                # 12 zh hashes
     ...
   ]
 }
 ```
 
-- **`zh:`** — хеші архівів з реєстру, по одному на кожну платформу (linux_amd64, darwin_arm64, ...);
-- **`h1:`** — хеш вмісту, лише для платформ, де виконувався `init` (у мене один, для Mac).
+- **`zh:`**: hashes of the archives from the registry, one per platform (linux_amd64, darwin_arm64, ...);
+- **`h1:`**: a hash of the contents, only for platforms where `init` was run (I have one, for Mac).
 
-Додати хеші для всіх своїх платформ: `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64`.
+To add hashes for all your platforms: `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64`.
 
-#### Як файл змінюється
+#### How the file changes
 
-| Команда | Що робить |
+| Command | What it does |
 |---|---|
-| `init` (файлу немає) | створює, обирає найновішу версію в межах обмеження |
-| `init` (файл є) | **бере версію з файлу**, навіть якщо вийшла новіша |
-| `init -upgrade` | обирає найновішу дозволену й перезаписує файл |
-| `providers lock` | додає хеші для вказаних платформ |
-| `init -lockfile=readonly` | забороняє змінювати файл, корисно в CI |
+| `init` (no file) | creates it, choosing the newest version within the constraint |
+| `init` (file exists) | **takes the version from the file**, even if a newer one exists |
+| `init -upgrade` | chooses the newest allowed version and overwrites the file |
+| `providers lock` | adds hashes for the specified platforms |
+| `init -lockfile=readonly` | forbids changes to the file, useful in CI |
 
-Вручну файл не редагують.
+The file isn't edited by hand.
 
-#### Що lock-файл не фіксує
+#### What the lock file doesn't pin
 
-- **модулі** — через `version` (Registry) або `?ref=` (git) у `source`;
-- **версію Terraform** — через `required_version` і `terraform_version` у CI.
+- **modules**: pinned with `version` (Registry) or `?ref=` (git) in `source`;
+- **the Terraform version**: pinned with `required_version` and `terraform_version` in CI.
 
-#### Lock-файл чи state lock
+#### Lock file vs state lock
 
-| | Lock-файл (dependency lock) | State lock |
+| | Lock file (dependency lock) | State lock |
 |---|---|---|
-| Що це | файл `.terraform.lock.hcl` | тимчасове блокування стейту |
-| Для чого | однакові версії провайдерів | не дати двом процесам змінювати стейт одночасно |
-| Де | у git | на blob стейту в Azure Storage (lease) |
-| Скільки живе | постійно | лише під час `plan` / `apply` |
+| What it is | the `.terraform.lock.hcl` file | a temporary lock on the state |
+| What it's for | the same provider versions | stopping two processes from changing the state at once |
+| Where | in git | on the state blob in Azure Storage (lease) |
+| How long it lives | permanently | only during `plan` / `apply` |
 
-#### Як відповісти на співбесіді
+#### How to answer in an interview
 
-1. **Що зберігає?** Точні версії провайдерів, обмеження, з яких їх обрали, і хеші для перевірки цілісності.
-2. **Навіщо комітити?** Щоб у всіх (локально, у колег, у CI) були однакові версії, а оновлення було свідомим кроком через PR, а не випадковим автоапгрейдом.
-3. **Як оновити?** `terraform init -upgrade` — найновіша версія в межах обмеження, файл перезаписується. Для нової мажорної версії спершу змінюють обмеження. Оновлений файл комітять.
-4. **`h1:` і `zh:`?** Контрольні суми, щоб переконатися, що провайдер не підмінений. `zh:` — архіви з реєстру для кожної платформи, `h1:` — вміст для платформ, де виконувався `init`.
-5. **Чи фіксує модулі?** Ні, лише провайдери. Модулі — через `version` або `?ref=`.
-6. **Lock-файл чи state lock?** Lock-файл фіксує версії провайдерів і лежить у git. State lock — тимчасове блокування стейту на час `plan` чи `apply`. В Azure це lease на blob.
+1. **What does it store?** Exact provider versions, the constraints they were chosen from, and hashes for integrity checks.
+2. **Why commit it?** So everyone (locally, colleagues, CI) has the same versions, and an upgrade is a deliberate step through a PR, not an accidental auto-upgrade.
+3. **How do you upgrade?** `terraform init -upgrade` picks the newest version within the constraint and overwrites the file. For a new major version, change the constraint first. Commit the updated file.
+4. **`h1:` and `zh:`?** Checksums to make sure the provider hasn't been tampered with. `zh:` covers the registry archives for every platform, `h1:` covers the contents for platforms where `init` was run.
+5. **Does it pin modules?** No, only providers. Modules are pinned with `version` or `?ref=`.
+6. **Lock file or state lock?** The lock file pins provider versions and lives in git. A state lock is a temporary lock on the state during `plan` or `apply`. In Azure, it's a lease on the blob.
 
-### 5. `resource` і `data`
+### 5. `resource` and `data`
 
 ```hcl
-# створити і керувати
+# create and manage
 resource "azurerm_resource_group" "rg" {
   name     = "rg-demo"
   location = "swedencentral"
 }
 
-# лише прочитати те, що вже існує
+# only read something that already exists
 data "azurerm_client_config" "current" {}
 
 output "subscription_id" {
@@ -155,128 +155,128 @@ output "subscription_id" {
 }
 ```
 
-Посилання на ресурс: `<тип>.<ім'я>.<атрибут>`. На data source: `data.<тип>.<ім'я>.<атрибут>`.
+A reference to a resource: `<type>.<name>.<attribute>`. To a data source: `data.<type>.<name>.<attribute>`.
 
-#### Локальне ім'я чи `name`: як відповісти на співбесіді
+#### Local name vs `name`: how to answer in an interview
 
 ```hcl
-resource "azurerm_virtual_network" "vnet" {   # ← локальне ім'я, для Terraform
-  name = "vnet-demo"                          # ← ім'я в Azure, видно в порталі
+resource "azurerm_virtual_network" "vnet" {   # ← local name, for Terraform
+  name = "vnet-demo"                          # ← name in Azure, visible in the portal
 ```
 
-> Локальне ім'я існує лише в Terraform: воно утворює адресу ресурсу в стейті (`azurerm_virtual_network.vnet`), і через нього посилаються на ресурс у коді. Azure про нього не знає. `name` — це реальне ім'я ресурсу в Azure, яке видно в порталі. Наслідки змін різні: якщо змінити локальне ім'я, Terraform вирішить, що це новий ресурс, і запропонує видалити старий, тому для перейменування використовують блок `moved`. Якщо змінити `name`, ресурс буде пересоздано, бо ім'я в Azure змінити не можна.
+> The local name exists only in Terraform: it forms the resource's address in the state (`azurerm_virtual_network.vnet`), and the code refers to the resource through it. Azure doesn't know about it. `name` is the real name of the resource in Azure, visible in the portal. Changing them has different consequences: if you change the local name, Terraform decides it's a new resource and proposes deleting the old one, which is why renames use a `moved` block. If you change `name`, the resource will be recreated, because a name in Azure can't be changed.
 
-| | Локальне ім'я (`vnet`) | `name` (`vnet-demo`) |
+| | Local name (`vnet`) | `name` (`vnet-demo`) |
 |---|---|---|
-| Хто знає | лише Terraform | Azure |
-| Для чого | посилання в коді, адреса в стейті | реальне ім'я ресурсу |
-| Унікальність | у межах типу ресурсу в одному модулі | за правилами Azure: VNet у межах RG, storage account глобально |
-| Якщо змінити | destroy + create, якщо немає `moved` | `-/+`, пересоздання |
+| Who knows it | only Terraform | Azure |
+| What it's for | references in code, the address in the state | the resource's real name |
+| Uniqueness | within the resource type in one module | by Azure's rules: a VNet within an RG, a storage account globally |
+| If you change it | destroy + create, unless there's a `moved` | `-/+`, recreation |
 
-#### Адреса ресурсу: як відповісти на співбесіді
+#### Resource address: how to answer in an interview
 
-> Адреса ресурсу — його унікальний ідентифікатор усередині Terraform, складений з типу і локального імені: `azurerm_virtual_network.vnet`. З `count` до неї додається індекс (`[0]`), з `for_each` — ключ (`["web"]`), у модулі — префікс `module.<ім'я>.`. За адресою Terraform зв'язує ресурс у коді з записом у стейті. Її використовують у виводі `plan`, у командах `state list`, `state show`, `state mv`, `state rm`, `import`, `apply -replace`, а також у блоках `moved` і `import`.
+> A resource address is its unique identifier inside Terraform, made of the type and the local name: `azurerm_virtual_network.vnet`. With `count`, an index is added (`[0]`); with `for_each`, a key (`["web"]`); in a module, the prefix `module.<name>.`. Terraform uses the address to link a resource in the code with an entry in the state. It's used in `plan` output, in the commands `state list`, `state show`, `state mv`, `state rm`, `import`, `apply -replace`, and in `moved` and `import` blocks.
 
-Форми адреси:
+Address forms:
 
 ```
-azurerm_virtual_network.vnet                    # звичайний ресурс
-azurerm_public_ip.pip[0]                        # з count, за індексом
-azurerm_linux_virtual_machine.vm["web"]         # з for_each, за ключем
-module.network.azurerm_virtual_network.this     # ресурс у модулі
-data.azurerm_client_config.current              # data source
+azurerm_virtual_network.vnet                    # a plain resource
+azurerm_public_ip.pip[0]                        # with count, by index
+azurerm_linux_virtual_machine.vm["web"]         # with for_each, by key
+module.network.azurerm_virtual_network.this     # a resource in a module
+data.azurerm_client_config.current              # a data source
 ```
 
-Де використовується:
+Where it's used:
 
-- `terraform state list` — список адрес усіх ресурсів;
-- вивід `plan`: `# azurerm_virtual_network.vnet will be created`;
+- `terraform state list`: a list of all resource addresses;
+- `plan` output: `# azurerm_virtual_network.vnet will be created`;
 - `state show`, `state rm`, `state mv`, `import`, `apply -replace=...`, `plan -target=...`;
-- блоки `moved` і `import` (`from`, `to`).
+- `moved` and `import` blocks (`from`, `to`).
 
-#### Аргумент чи атрибут, `(known after apply)`: як відповісти на співбесіді
+#### Argument vs attribute, `(known after apply)`: how to answer in an interview
 
-> Аргумент — це вхід: значення, яке я задаю ресурсу в коді, як-от `name` чи `location`. Атрибут — це вихід: значення, яке ресурс віддає і на яке можна послатися, наприклад `azurerm_public_ip.pip.ip_address`. Атрибути включають усі аргументи плюс computed-значення, які визначає провайдер або Azure: `id`, IP-адреси. Поки ресурс не створено, таких значень немає, і `plan` позначає їх `(known after apply)`. Ця позначка переходить і на ресурси, що на них посилаються. Через це computed-значення не можна використовувати в `count` і в ключах `for_each`, бо Terraform має знати їх уже під час `plan`.
+> An argument is an input: a value I set on a resource in the code, like `name` or `location`. An attribute is an output: a value the resource exposes, which you can refer to, e.g. `azurerm_public_ip.pip.ip_address`. Attributes include all arguments plus computed values determined by the provider or Azure: `id`, IP addresses. Until the resource is created these values don't exist, and `plan` marks them `(known after apply)`. That mark carries over to resources that refer to them. That's why computed values can't be used in `count` or in `for_each` keys: Terraform needs to know them already during `plan`.
 
 ```hcl
 resource "azurerm_public_ip" "pip" {
-  name              = "pip-demo-vm"   # аргумент (вхід)
-  allocation_method = "Static"        # аргумент (вхід)
+  name              = "pip-demo-vm"   # argument (input)
+  allocation_method = "Static"        # argument (input)
 }
 
 output "ip" {
-  value = azurerm_public_ip.pip.ip_address   # атрибут (вихід), його задає Azure
+  value = azurerm_public_ip.pip.ip_address   # attribute (output), set by Azure
 }
 ```
 
-- Різниця в **напрямку**: аргумент — що передаю я, атрибут — що віддає ресурс.
-- **Computed** — атрибути, які обчислює провайдер чи Azure, а не я.
-- Помилка при використанні computed-значення в `count` чи `for_each`: *«value depends on resource attributes that cannot be determined until apply»*.
+- The difference is the **direction**: an argument is what I pass in, an attribute is what the resource gives back.
+- **Computed** attributes are calculated by the provider or Azure, not by me.
+- The error when using a computed value in `count` or `for_each`: *"value depends on resource attributes that cannot be determined until apply"*.
 
-#### Data source детально
+#### Data sources in detail
 
-Data source **читає** те, що вже існує, і дає використати ці дані в коді, **не беручи під керування**.
+A data source **reads** something that already exists and lets you use that data in code, **without taking it under management**.
 
 ```hcl
 data "azurerm_resource_group" "tfstate" {
-  name = "rg-tfstate"          # аргумент = критерій пошуку
+  name = "rg-tfstate"          # argument = search criterion
 }
 
 output "tfstate_location" {
-  value = data.azurerm_resource_group.tfstate.location   # атрибут = знайдені дані
+  value = data.azurerm_resource_group.tfstate.location   # attribute = the data found
 }
 ```
 
 | | `resource` | `data` |
 |---|---|---|
-| Що робить | створює, змінює, видаляє | лише читає |
-| Хто власник | Terraform | хтось інший: людина, інша команда, інший стейт |
-| `destroy` | видаляє ресурс | нічого не видаляє |
-| Якщо об'єкта немає | створить | **помилка**, `plan` впаде |
-| У плані | `+`, `~`, `-` | `<=` або не видно |
+| What it does | creates, changes, deletes | only reads |
+| Who owns it | Terraform | someone else: a person, another team, another state |
+| `destroy` | deletes the resource | deletes nothing |
+| If the object doesn't exist | creates it | **error**, `plan` fails |
+| In the plan | `+`, `~`, `-` | `<=` or not shown |
 
-Типові випадки в Azure:
+Typical cases in Azure:
 
-| Data source | Для чого |
+| Data source | What it's for |
 |---|---|
-| `azurerm_client_config` | `tenant_id`, `subscription_id`, `client_id`, `object_id` того, хто запускає Terraform. `object_id` потрібен, наприклад, щоб видати собі доступ до Key Vault |
-| `azurerm_subscription` | ID і назва підписки |
-| `azurerm_virtual_network` | спільна мережа (hub), якою керує інша команда |
-| `azurerm_key_vault_secret` | секрет з Key Vault. **Значення потрапить у стейт** |
-| `terraform_remote_state` | outputs іншого стейту: з'єднати окремі стейти (мережа і застосунки) |
+| `azurerm_client_config` | `tenant_id`, `subscription_id`, `client_id`, `object_id` of whoever runs Terraform. `object_id` is needed, for example, to give yourself access to a Key Vault |
+| `azurerm_subscription` | the subscription's ID and name |
+| `azurerm_virtual_network` | a shared network (hub) managed by another team |
+| `azurerm_key_vault_secret` | a secret from Key Vault. **The value ends up in the state** |
+| `terraform_remote_state` | outputs of another state: connecting separate states (network and applications) |
 
-Коли читається:
+When it's read:
 
-- зазвичай **під час `plan`**, і в плані не видно;
-- якщо аргументи залежать від `(known after apply)`, читання відкладається до `apply`: у плані `<= data.xxx will be read during apply`;
-- читається при **кожному** `plan` і `apply`, тож дані завжди свіжі.
+- usually **during `plan`**, and it's not shown in the plan;
+- if its arguments depend on `(known after apply)` values, reading is deferred to `apply`: the plan shows `<= data.xxx will be read during apply`;
+- it's read on **every** `plan` and `apply`, so the data is always fresh.
 
-`data` чи `import`:
+`data` vs `import`:
 
-- **`data`** — потрібні дані ресурсу, але керує ним хтось інший;
-- **`import`** — відтепер цим ресурсом керую я.
+- **`data`**: you need a resource's data, but someone else manages it;
+- **`import`**: from now on, I manage this resource.
 
-Типова помилка — `import` спільного ресурсу (hub VNet): тоді ваш `destroy` може видалити мережу, від якої залежать інші.
+A typical mistake is `import`ing a shared resource (a hub VNet): then your `destroy` may delete a network others depend on.
 
-У моєму проєкті: `rg-tfstate` створена вручну і не повинна видалятися Terraform, тож якщо вона потрібна в коді, то лише через `data`.
+In my project: `rg-tfstate` was created by hand and must not be deleted by Terraform, so if it's needed in code, it's only through `data`.
 
-### 6. Змінні, locals, outputs
+### 6. Variables, locals, outputs
 
 ```hcl
 variable "location" {
   type        = string
   default     = "swedencentral"
-  description = "Регіон для всіх ресурсів"
+  description = "Region for all resources"
 
   validation {
     condition     = contains(["swedencentral", "northeurope"], var.location)
-    error_message = "Дозволені лише swedencentral і northeurope."
+    error_message = "Only swedencentral and northeurope are allowed."
   }
 }
 
 variable "admin_password" {
   type      = string
-  sensitive = true    # не показується в plan і логах, але в стейті лежить відкрито
+  sensitive = true    # not shown in plan and logs, but stored in plain text in the state
 }
 
 locals {
@@ -292,108 +292,108 @@ output "rg_name" {
 }
 ```
 
-Типи змінних: `string`, `number`, `bool`, `list(...)`, `set(...)`, `map(...)`, `object({...})`, `tuple([...])`.
+Variable types: `string`, `number`, `bool`, `list(...)`, `set(...)`, `map(...)`, `object({...})`, `tuple([...])`.
 
-#### Змінні детально
+#### Variables in detail
 
-Усі аргументи блоку (жоден не обов'язковий):
+All block arguments (none is required):
 
 ```hcl
 variable "vm_size" {
   type        = string
   default     = "Standard_B2ls_v2"
-  description = "Розмір VM"
+  description = "VM size"
   sensitive   = false
-  nullable    = false                       # заборонити null
+  nullable    = false                       # forbid null
   validation {
     condition     = startswith(var.vm_size, "Standard_")
-    error_message = "Розмір має починатися з Standard_."
+    error_message = "The size must start with Standard_."
   }
 }
 ```
 
-**Обов'язкова чи ні:** без `default` змінна обов'язкова (як `ssh_public_key`). Значення, що відрізняються між середовищами, і секрети робіть без `default`, щоб їх неможливо було забути.
+**Required or not:** without `default`, a variable is required (like `ssh_public_key`). Make values that differ between environments, and secrets, have no `default`, so they can't be forgotten.
 
-**Типи:**
+**Types:**
 
 ```hcl
-list(string)      # ["a", "b"], порядок важливий, можуть повторюватися
-set(string)       # унікальні, без порядку; підходить для for_each
+list(string)      # ["a", "b"], order matters, duplicates allowed
+set(string)       # unique, unordered; suitable for for_each
 map(string)       # { key = "value" }
 
-object({           # поля різних типів
+object({           # fields of different types
   size    = string
   disk_gb = number
-  zones   = optional(list(string), [])   # поле можна не передавати
+  zones   = optional(list(string), [])   # the field can be omitted
 })
 
-map(object({ size = string }))           # типово для for_each
+map(object({ size = string }))           # typical for for_each
 ```
 
-Тип потрібен, щоб Terraform перевірив значення до звернення в Azure і дав зрозумілу помилку.
+The type lets Terraform check the value before contacting Azure and give a clear error.
 
 **`validation`:**
 
-- блоків може бути кілька;
-- виконується на початку `plan`, до звернень в Azure;
-- з Terraform 1.9 у `condition` можна посилатися на інші змінні;
-- корисні функції: `contains`, `can(regex(...))`, `length`, `startswith`, `alltrue`.
+- there can be several blocks;
+- it runs at the start of `plan`, before any calls to Azure;
+- since Terraform 1.9, `condition` can refer to other variables;
+- useful functions: `contains`, `can(regex(...))`, `length`, `startswith`, `alltrue`.
 
-**`sensitive` і `ephemeral`:**
+**`sensitive` and `ephemeral`:**
 
-- `sensitive = true` ховає значення з `plan` і логів, output з такою змінною теж мусить бути `sensitive`;
-- **у стейті значення лежить відкритим текстом**;
-- `ephemeral = true` (Terraform 1.10+): значення не потрапляє ні в план, ні в стейт, але використовувати його можна лише там, де Terraform не мусить його зберігати.
+- `sensitive = true` hides the value from `plan` and logs; an output using such a variable must also be `sensitive`;
+- **in the state, the value is stored in plain text**;
+- `ephemeral = true` (Terraform 1.10+): the value goes into neither the plan nor the state, but it can only be used where Terraform doesn't need to store it.
 
-**Передача складних типів** — у синтаксисі HCL:
+**Passing complex types** uses HCL syntax:
 
 ```
 terraform plan -var='zones=["1","2"]'
 export TF_VAR_tags='{ env = "dev", owner = "me" }'
 ```
 
-| Файл | Підхоплюється | Типове використання |
+| File | Loaded | Typical use |
 |---|---|---|
-| `terraform.tfvars` | автоматично | локальні значення |
-| `*.auto.tfvars` | автоматично | додаткові значення |
-| `prod.tfvars` | лише через `-var-file` | значення для середовища |
+| `terraform.tfvars` | automatically | local values |
+| `*.auto.tfvars` | automatically | additional values |
+| `prod.tfvars` | only with `-var-file` | values for an environment |
 
-Файли без секретів (`dev.tfvars`, `prod.tfvars`) зазвичай комітять, секрети передають через `TF_VAR_` із секретів CI.
+Files without secrets (`dev.tfvars`, `prod.tfvars`) are usually committed; secrets are passed through `TF_VAR_` from CI secrets.
 
-**Чого змінні не вміють:**
+**What variables can't do:**
 
-- не працюють у блоці `backend` (він налаштовується до читання змінних) → `-backend-config`;
-- `default` не може посилатися на ресурси чи інші змінні, лише константа → для обчислень є `locals`;
-- `var.x` лише для читання.
+- they don't work in the `backend` block (it's configured before variables are read) → use `-backend-config`;
+- `default` can't refer to resources or other variables, only a constant → `locals` are for computed values;
+- `var.x` is read-only.
 
-**У модулях** змінні — це входи модуля: `type`, `description` і `validation` утворюють контракт модуля.
+**In modules,** variables are the module's inputs: `type`, `description` and `validation` form the module's contract.
 
-**Домовленості:** усі змінні у `variables.tf`, імена в `snake_case`, у кожної `type` і `description`, виносити в змінні лише те, що реально змінюється.
+**Conventions:** all variables in `variables.tf`, names in `snake_case`, every variable has a `type` and `description`, and only things that actually change become variables.
 
-#### Locals детально
+#### Locals in detail
 
-Local — іменоване значення всередині конфігурації: вираз записується один раз і використовується за ім'ям.
+A local is a named value inside the configuration: the expression is written once and used by name.
 
-Блок **`locals`** (множина), звертання **`local.x`** (однина). Блоків може бути кілька, імена унікальні в межах модуля.
+The block is **`locals`** (plural), and you refer to it as **`local.x`** (singular). There can be several blocks; names are unique within a module.
 
-Навіщо:
+Why:
 
 ```hcl
 locals {
-  # не повторювати вираз
+  # don't repeat an expression
   name_prefix = "${var.project}-${var.env}"
 
-  # дати складному виразу ім'я
+  # give a complex expression a name
   is_prod = var.env == "prod"
   vm_size = local.is_prod ? "Standard_D2s_v5" : "Standard_B1s"
 
-  # об'єднати дані
+  # merge data
   tags = merge(var.extra_tags, {
     env        = var.env
     managed_by = "terraform"
   })
 
-  # підготувати дані для for_each
+  # prepare data for for_each
   subnets = {
     app  = cidrsubnet(var.address_space, 8, 1)
     mgmt = cidrsubnet(var.address_space, 8, 2)
@@ -401,27 +401,27 @@ locals {
 }
 ```
 
-На що може посилатися: змінні, інші locals, ресурси, data sources, функції. Якщо посилається на `(known after apply)`, сам стає таким і не підходить для `count` і ключів `for_each`. Посилання по колу заборонені.
+What it can refer to: variables, other locals, resources, data sources, functions. If it refers to a `(known after apply)` value, it becomes one too, and can't be used for `count` or `for_each` keys. Circular references are forbidden.
 
 | | `variable` | `local` | `output` |
 |---|---|---|---|
-| Напрямок | **вхід** ззовні | **внутрішнє** значення | **вихід** назовні |
-| Хто задає | користувач: `-var`, `tfvars`, `TF_VAR_` | автор коду | автор коду |
-| Можна змінити ззовні | так | **ні** | ні |
-| Вирази і посилання на ресурси | ні, `default` лише константа | так | так |
-| Аналогія | параметр функції | локальна змінна функції | значення, яке функція повертає |
+| Direction | **input** from outside | **internal** value | **output** to the outside |
+| Who sets it | the user: `-var`, `tfvars`, `TF_VAR_` | the code author | the code author |
+| Can be changed from outside | yes | **no** | no |
+| Expressions and references to resources | no, `default` is a constant only | yes | yes |
+| Analogy | a function parameter | a function's local variable | a function's return value |
 
-Як обирати:
+How to choose:
 
-- задає той, хто запускає код (регіон, розмір, середовище) → `variable`;
-- обчислюється або є внутрішньою домовленістю (префікс імен, спільні теги) → `local`;
-- потрібне поза модулем (IP, ID підмережі) → `output`.
+- set by whoever runs the code (region, size, environment) → `variable`;
+- computed, or an internal convention (name prefix, common tags) → `local`;
+- needed outside the module (IP, subnet ID) → `output`.
 
-Чого уникати: local для кожного очевидного значення; довгі ланцюжки locals зі складною логікою; local замість variable, коли значення має відрізнятися між середовищами.
+What to avoid: a local for every obvious value; long chains of locals with complex logic; a local instead of a variable when the value should differ between environments.
 
-#### Outputs детально
+#### Outputs in detail
 
-Output — значення, яке конфігурація віддає назовні: людині, скрипту в CI, іншому модулю чи стейту.
+An output is a value the configuration exposes to the outside: to a person, a CI script, another module or another state.
 
 ```hcl
 output "vm_public_ip" {
@@ -430,111 +430,111 @@ output "vm_public_ip" {
 }
 ```
 
-| Аргумент | Що робить |
+| Argument | What it does |
 |---|---|
-| `value` | **обов'язковий**: будь-який вираз |
-| `description` | пояснення, особливо важливе в модулях |
-| `sensitive` | ховати з виводу `plan` і `apply` |
-| `depends_on` | явна залежність, потрібна рідко |
-| `precondition` | перевірка перед тим, як віддати значення |
+| `value` | **required**: any expression |
+| `description` | an explanation, especially important in modules |
+| `sensitive` | hide it from `plan` and `apply` output |
+| `depends_on` | an explicit dependency, rarely needed |
+| `precondition` | a check before the value is returned |
 
-Де видно:
+Where you see it:
 
 ```
-terraform output                     # усі
-terraform output vm_public_ip        # один, у лапках
-terraform output -raw vm_public_ip   # без лапок, для скриптів
-terraform output -json               # JSON, для програм
+terraform output                     # all
+terraform output vm_public_ip        # one, in quotes
+terraform output -raw vm_public_ip   # without quotes, for scripts
+terraform output -json               # JSON, for programs
 ```
 
-- `terraform output` **не звертається до Azure**, а читає **стейт**: показує стан на момент останнього `apply`.
-- У плані зміни видно окремим блоком `Changes to Outputs`.
+- `terraform output` **doesn't contact Azure**; it reads the **state**, so it shows the values as of the last `apply`.
+- In the plan, changes are shown in a separate `Changes to Outputs` section.
 
-Навіщо:
+Why:
 
-- **людині** — IP, URL, імена;
-- **CI** — через `-raw`: `echo "ACR_SERVER=$(terraform output -raw acr_login_server)" >> $GITHUB_ENV`;
-- **модулям** — це публічний інтерфейс модуля: root бачить лише його outputs, `module.network.subnet_id`;
-- **іншим стейтам** — `terraform_remote_state` читає **лише outputs**, а не ресурси.
+- **for people**: IP, URL, names;
+- **for CI**: through `-raw`: `echo "ACR_SERVER=$(terraform output -raw acr_login_server)" >> $GITHUB_ENV`;
+- **for modules**: they're the module's public interface; the root sees only its outputs, `module.network.subnet_id`;
+- **for other states**: `terraform_remote_state` reads **only outputs**, not resources.
 
 `sensitive`:
 
-- у `plan` і `apply` буде `<sensitive>`;
-- якщо output використовує sensitive-значення, `sensitive = true` обов'язковий, інакше помилка;
-- **значення не секретне**: `terraform output -raw` і `-json` покажуть його відкрито, і в стейті воно відкрите.
+- `plan` and `apply` show `<sensitive>`;
+- if an output uses a sensitive value, `sensitive = true` is required, otherwise there's an error;
+- **the value isn't secret**: `terraform output -raw` and `-json` show it in plain text, and it's in plain text in the state.
 
-Домовленості: outputs в `outputs.tf`; віддавати конкретні значення (`id`, `name`, IP), а не весь ресурс; у кожного output модуля `description`.
+Conventions: outputs in `outputs.tf`; expose specific values (`id`, `name`, IP), not the whole resource; every module output has a `description`.
 
-### 7. Звідки береться значення змінної
+### 7. Where a variable's value comes from
 
-Від найнижчого пріоритету до найвищого (кожне наступне перекриває попереднє):
+From lowest to highest priority (each one overrides the previous):
 
-1. `default` у блоці `variable`
-2. змінні оточення `TF_VAR_<ім'я>`
+1. `default` in the `variable` block
+2. environment variables `TF_VAR_<name>`
 3. `terraform.tfvars`
 4. `terraform.tfvars.json`
-5. `*.auto.tfvars` (в алфавітному порядку)
-6. `-var` і `-var-file` у командному рядку (в порядку, як написано)
+5. `*.auto.tfvars` (in alphabetical order)
+6. `-var` and `-var-file` on the command line (in the order written)
 
-Якщо значення немає ніде, Terraform питає інтерактивно. У CI це означає зависання, тому там завжди `-input=false`.
+If there's no value anywhere, Terraform asks interactively. In CI this means hanging, so there it's always `-input=false`.
 
-**У моєму проєкті:** локально `ssh_public_key` береться з `terraform.tfvars`, а в CI з `TF_VAR_ssh_public_key` (секрет `SSH_PUBLIC_KEY`).
+**In my project:** locally, `ssh_public_key` comes from `terraform.tfvars`, and in CI from `TF_VAR_ssh_public_key` (the `SSH_PUBLIC_KEY` secret).
 
-### 8. Залежності
+### 8. Dependencies
 
-- **Неявні:** якщо ресурс посилається на атрибут іншого (`subnet_id = azurerm_subnet.subnet.id`), Terraform сам створить їх у правильному порядку.
-- **Явні:** `depends_on = [...]` лише тоді, коли залежність є, але посилання немає. Наприклад, VM має чекати, поки з'явиться роль RBAC.
-- Незалежні ресурси Terraform створює паралельно (за замовчуванням до 10 одночасно).
+- **Implicit:** if a resource refers to another's attribute (`subnet_id = azurerm_subnet.subnet.id`), Terraform creates them in the right order by itself.
+- **Explicit:** `depends_on = [...]` only when there's a dependency but no reference. For example, a VM has to wait until an RBAC role exists.
+- Terraform creates independent resources in parallel (up to 10 at once by default).
 
-`terraform graph` виводить граф залежностей у форматі DOT.
+`terraform graph` prints the dependency graph in DOT format.
 
-### 9. Провайдери
+### 9. Providers
 
-#### Як влаштований Terraform
+#### How Terraform is built
 
 ```
-Terraform core                        Провайдери (плагіни)
+Terraform core                        Providers (plugins)
 ─────────────────                     ─────────────────────
-читає .tf файли                       azurerm  → Azure ARM API
-будує граф залежностей         ──►    azuread  → Microsoft Graph API
-порівнює код зі стейтом               random   → нічого, генерує значення
-вирішує: create/update/delete         github   → GitHub API
+reads .tf files                       azurerm  → Azure ARM API
+builds the dependency graph    ──►    azuread  → Microsoft Graph API
+compares code with state              random   → nothing, generates values
+decides: create/update/delete         github   → GitHub API
 ```
 
-**Core** нічого не знає про Azure, він вирішує, **що** зробити. **Провайдер** знає, **як**: які API викликати, які поля потрібні, як чекати завершення операції. Тому той самий Terraform працює з Azure, AWS, GitHub і Cloudflare.
+**Core** knows nothing about Azure; it decides **what** to do. The **provider** knows **how**: which APIs to call, which fields are required, how to wait for an operation to finish. That's why the same Terraform works with Azure, AWS, GitHub and Cloudflare.
 
-#### Звідки береться провайдер
+#### Where a provider comes from
 
-- `source = "hashicorp/azurerm"` — адреса в Terraform Registry: `<namespace>/<назва>`.
-- `terraform init` завантажує його з registry.terraform.io у `.terraform/providers/`. Тому `.terraform/` у `.gitignore`: це бінарники, а не код.
-- Провайдер має **власну версію**, незалежну від версії Terraform.
-- Префікс типу ресурсу показує провайдера: `azurerm_resource_group` → `azurerm`, `random_string` → `random`.
-- Мажорні версії (3 → 4 → 5) ламають сумісність. Про обмеження версій і lock-файл див. розділи 3 і 4.
+- `source = "hashicorp/azurerm"` is an address in the Terraform Registry: `<namespace>/<name>`.
+- `terraform init` downloads it from registry.terraform.io into `.terraform/providers/`. That's why `.terraform/` is in `.gitignore`: it's binaries, not code.
+- A provider has **its own version**, independent of the Terraform version.
+- The resource type prefix shows the provider: `azurerm_resource_group` → `azurerm`, `random_string` → `random`.
+- Major versions (3 → 4 → 5) break compatibility. For version constraints and the lock file, see sections 3 and 4.
 
-#### Блок `provider`
+#### The `provider` block
 
 ```hcl
 provider "azurerm" {
-  features {}                 # обов'язковий для azurerm, навіть порожній
-  subscription_id = "..."     # в azurerm 4.x+ обов'язковий
+  features {}                 # required for azurerm, even if empty
+  subscription_id = "..."     # required in azurerm 4.x+
 }
 ```
 
-- У `features {}` налаштовують поведінку, наприклад `resource_group { prevent_deletion_if_contains_resources = false }`. Саме ця перевірка не дала `destroy` видалити групу, в якій лишився `cae-demo`.
-- В azurerm 3.x `subscription_id` можна не вказувати, тоді він береться з `az` або `ARM_SUBSCRIPTION_ID`.
+- `features {}` configures behavior, e.g. `resource_group { prevent_deletion_if_contains_resources = false }`. This exact check stopped `destroy` from deleting a group that still contained `cae-demo`.
+- In azurerm 3.x, `subscription_id` can be omitted; it's then taken from `az` or `ARM_SUBSCRIPTION_ID`.
 
-#### Як `azurerm` входить в Azure
+#### How `azurerm` signs in to Azure
 
-| Спосіб | Де |
+| Method | Where |
 |---|---|
-| `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID` | мій CI зараз |
-| OIDC (`ARM_USE_OIDC=true`) | тиждень 8 |
-| managed identity (`ARM_USE_MSI=true`) | Terraform на VM в Azure |
-| Azure CLI (`az login`) | локально на Mac |
+| `ARM_CLIENT_ID`, `ARM_CLIENT_SECRET`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID` | my CI right now |
+| OIDC (`ARM_USE_OIDC=true`) | week 8 |
+| managed identity (`ARM_USE_MSI=true`) | Terraform on a VM in Azure |
+| Azure CLI (`az login`) | locally on the Mac |
 
-Тому локально Terraform працює під моїм акаунтом, а в CI під `github-actions-terraform`.
+That's why locally Terraform runs as my account, and in CI as `github-actions-terraform`.
 
-#### Кілька провайдерів: `alias`
+#### Several providers: `alias`
 
 ```hcl
 provider "azurerm" {
@@ -544,7 +544,7 @@ provider "azurerm" {
 provider "azurerm" {
   alias           = "prod"
   features {}
-  subscription_id = "<інша підписка>"
+  subscription_id = "<another subscription>"
 }
 
 resource "azurerm_resource_group" "prod_rg" {
@@ -553,73 +553,73 @@ resource "azurerm_resource_group" "prod_rg" {
 }
 ```
 
-Так з одного коду керують кількома підписками чи регіонами.
+This is how one codebase manages several subscriptions or regions.
 
-#### Провайдери в Azure-проєктах
+#### Providers in Azure projects
 
-| Провайдер | Для чого |
+| Provider | What it's for |
 |---|---|
-| `azurerm` | ресурси Azure через ARM |
-| `azuread` | Entra ID: app registrations, групи, користувачі (через Microsoft Graph) |
-| `azapi` | будь-який ресурс Azure напряму через ARM API, навіть новий, якого ще немає в `azurerm` |
-| `random` | випадкові імена, суфікси, паролі |
-| `tls` | ключі та сертифікати |
+| `azurerm` | Azure resources through ARM |
+| `azuread` | Entra ID: app registrations, groups, users (through Microsoft Graph) |
+| `azapi` | any Azure resource directly through the ARM API, even a new one not yet in `azurerm` |
+| `random` | random names, suffixes, passwords |
+| `tls` | keys and certificates |
 
-`azurerm` проти `azuread` — та сама різниця, що й `az group` проти `az ad`: ARM проти Microsoft Graph.
+`azurerm` vs `azuread` is the same difference as `az group` vs `az ad`: ARM vs Microsoft Graph.
 
-### 10. Декларативний підхід
+### 10. The declarative approach
 
-**Declarative** — описую **бажаний результат** («має існувати VNet з такими параметрами»). **Imperative** — описую **кроки** («створи групу, потім VNet, потім підмережу»).
+**Declarative**: I describe the **desired result** ("a VNet with these parameters must exist"). **Imperative**: I describe the **steps** ("create a group, then a VNet, then a subnet").
 
-Імперативно (скрипт):
+Imperative (a script):
 
 ```bash
 az group create -n rg-demo -l swedencentral
 az network vnet create -g rg-demo -n vnet-demo --address-prefix 10.0.0.0/16
 ```
 
-Декларативно (Terraform): блоки `resource`, порядок у файлах не важливий.
+Declarative (Terraform): `resource` blocks, and their order in the files doesn't matter.
 
-| Ситуація | Скрипт `az` | Terraform |
+| Situation | `az` script | Terraform |
 |---|---|---|
-| Запуск удруге без змін | команди виконуються знову, частина падає з «already exists» | `No changes` |
-| Змінили параметр | писати нову команду `update` | змінити значення в коді |
-| Прибрали ресурс | писати команду `delete` | видалити блок з коду |
-| Зміна в порталі | скрипт не дізнається | `plan` покаже і поверне як у коді |
+| Running again with no changes | the commands run again, some fail with "already exists" | `No changes` |
+| A parameter changed | write a new `update` command | change the value in the code |
+| A resource removed | write a `delete` command | delete the block from the code |
+| A change in the portal | the script never finds out | `plan` shows it and reverts it to the code |
 
-**Ідемпотентність** — скільки разів не запускай, результат той самий. Декларативний підхід дає її автоматично.
+**Idempotency**: however many times you run it, the result is the same. The declarative approach gives you this automatically.
 
-Як Terraform це робить — **reconciliation** (узгодження):
+How Terraform does it: **reconciliation**:
 
 ```
-Бажаний стан (код)  ─┐
-                     ├──►  plan: різниця  ──►  apply: дії, щоб прибрати різницю
-Поточний стан ───────┘
-(стейт + refresh з Azure)
+Desired state (code)  ─┐
+                       ├──►  plan: the difference  ──►  apply: actions to remove the difference
+Current state ─────────┘
+(state + refresh from Azure)
 ```
 
-**У моєму проєкті:** після ручного `destroy` пуш знову створив VM. Для декларативного підходу це правильно: код каже «VM має бути». Щоб ресурсу не було, його прибирають **з коду**.
+**In my project:** after a manual `destroy`, a push recreated the VM. For the declarative approach that's correct: the code says "the VM must exist". To make a resource go away, you remove it **from the code**.
 
-| Переваги | Недоліки |
+| Advantages | Disadvantages |
 |---|---|
-| код описує поточний стан, читається як документація | менше контролю над порядком виконання |
-| ідемпотентність з коробки | обмежена логіка |
-| видно різницю до змін (`plan`) | потрібен стейт, і його треба берегти |
-| виявлення drift | разові процедури (міграції, перезапуски) виражати незручно |
+| the code describes the current state and reads like documentation | less control over the order of execution |
+| idempotency out of the box | limited logic |
+| you see the difference before changes (`plan`) | you need state, and you have to protect it |
+| drift detection | one-off procedures (migrations, restarts) are awkward to express |
 
-На практиці поєднують: Terraform декларативно описує інфраструктуру, разові дії виконують імперативні скрипти в CI.
+In practice they're combined: Terraform declaratively describes the infrastructure, and one-off actions are run by imperative scripts in CI.
 
-Інші інструменти: **Bicep/ARM** — декларативні без стейту; **Kubernetes** — декларативні маніфести з постійним узгодженням; **Ansible** — декларативні модулі, але playbook виконується по кроках; **Pulumi** — декларативна модель на імперативній мові.
+Other tools: **Bicep/ARM** are declarative without state; **Kubernetes** has declarative manifests with continuous reconciliation; **Ansible** has declarative modules, but a playbook runs step by step; **Pulumi** has a declarative model in an imperative language.
 
-#### Як відповісти на співбесіді
+#### How to answer in an interview
 
-> Декларативний підхід означає, що я описую бажаний кінцевий стан, а не кроки. Terraform порівнює код зі стейтом і реальним станом в Azure і сам визначає, що створити, змінити чи видалити, і в якому порядку. Звідси ідемпотентність: повторний `apply` без змін нічого не робить. Видалення теж декларативне: щоб ресурсу не було, його прибирають з коду. В імперативному підході, як у скрипті з командами `az`, я сам задаю послідовність дій, і повторний запуск, зміни та видалення доводиться обробляти вручну.
+> The declarative approach means I describe the desired end state, not the steps. Terraform compares the code with the state and the real state in Azure, and decides by itself what to create, change or delete, and in what order. That gives idempotency: a repeated `apply` with no changes does nothing. Deletion is declarative too: to make a resource go away, you remove it from the code. In the imperative approach, like a script of `az` commands, I set the sequence of actions myself, and I have to handle reruns, changes and deletions by hand.
 
-## Команди напам'ять
+## Commands to know by heart
 
 ```
 terraform init
-terraform init -upgrade          # оновити провайдери в межах обмежень
+terraform init -upgrade          # upgrade providers within constraints
 terraform fmt -recursive
 terraform validate
 terraform plan
@@ -627,63 +627,63 @@ terraform plan -var="location=northeurope"
 terraform apply -auto-approve -input=false
 terraform output
 terraform output -raw vm_public_ip
-terraform console                # інтерактивна перевірка виразів
-terraform providers              # які провайдери потрібні і звідки
+terraform console                # interactive expression testing
+terraform providers              # which providers are needed and where from
 ```
 
-## Типові помилки
+## Common mistakes
 
-- Порожній блок `backend {}` або змінна без значення: у CI Terraform чекає вводу і висить.
-- Обмеження версії без верхньої межі (`>=`): несподіваний перехід на нову мажорну версію.
-- `sensitive = true` не шифрує значення в стейті, а лише ховає його з виводу.
-- Lock-файл у `.gitignore`: у різних середовищах різні версії провайдерів.
+- An empty `backend {}` block or a variable without a value: in CI, Terraform waits for input and hangs.
+- A version constraint with no upper bound (`>=`): an unexpected jump to a new major version.
+- `sensitive = true` doesn't encrypt the value in the state; it only hides it from output.
+- The lock file in `.gitignore`: different provider versions in different environments.
 
-## Перевірка себе
+## Check yourself
 
-Без документації напишіть з нуля RG + VNet + subnet зі змінною `location`, тегами через `locals` і output з ID підмережі. Поясніть кожен рядок.
+Without documentation, write from scratch an RG + VNet + subnet with a `location` variable, tags through `locals`, and an output with the subnet ID. Explain every line.
 
-## Питання співбесіди
+## Interview questions
 
-- Що робить `terraform init`?
-- Навіщо lock-файл і чому його комітять?
-- `~> 3.0` проти `>= 3.0`: що може статися з другим варіантом?
-- У якому порядку Terraform бере значення змінних?
-- `resource` проти `data`: різниця?
-- Коли потрібен `depends_on`?
-- Що означає `-/+` у плані і чому це небезпечно?
-- Чи захищає `sensitive = true` секрет у стейті?
-- Що таке провайдер і як він пов'язаний з Terraform core?
-- Звідки Terraform бере провайдер і де він зберігається?
-- Як провайдер `azurerm` автентифікується в Azure?
-- Як керувати двома підписками з одного коду?
-- Що робити, якщо потрібного ресурсу ще немає в `azurerm`?
-- Що буде, якщо об'єкт, який читає data source, не існує?
-- Коли data source читається під час `plan`, а коли під час `apply`?
-- `data` чи `import`: коли що?
-- Як отримати subscription ID і object ID того, хто запускає Terraform?
-- Як передати значення з одного стейту в інший?
-- Як зробити змінну обов'язковою?
-- Що робить `optional()` в `object`?
-- Як працює `validation` і коли вона виконується?
-- `sensitive` чи `ephemeral`: що з них захищає стейт?
-- Чому змінні не можна використовувати в `backend`?
-- Чим `variable` відрізняється від `local`?
-- Як передати секрет у Terraform у CI?
-- Коли використовувати `local`, а коли `variable`?
-- Чи можна перевизначити `local` ззовні?
-- На що може посилатися `local`?
-- Як зробити спільні теги для всіх ресурсів?
-- Навіщо потрібні outputs? Наведіть три сценарії.
-- Звідки `terraform output` бере значення?
-- Чим `-raw` відрізняється від `-json` і звичайного виводу?
-- Як модуль передає дані root-модулю?
-- Чи захищає `sensitive = true` значення output?
-- Що можна прочитати з іншого стейту через `terraform_remote_state`?
-- Що означають хеші `h1:` і `zh:`?
-- Чи фіксує lock-файл версії модулів?
-- Чим lock-файл відрізняється від state lock?
-- Декларативний чи імперативний підхід: різниця?
-- Що таке ідемпотентність і як Terraform її забезпечує?
-- Чому в Terraform порядок блоків не має значення?
-- Як видалити ресурс у декларативному підході?
-- Ansible декларативний чи імперативний?
+- What does `terraform init` do?
+- Why have a lock file, and why commit it?
+- `~> 3.0` vs `>= 3.0`: what can happen with the second one?
+- In what order does Terraform take variable values?
+- `resource` vs `data`: what's the difference?
+- When do you need `depends_on`?
+- What does `-/+` mean in a plan, and why is it dangerous?
+- Does `sensitive = true` protect a secret in the state?
+- What is a provider, and how does it relate to Terraform core?
+- Where does Terraform get a provider from, and where is it stored?
+- How does the `azurerm` provider authenticate to Azure?
+- How do you manage two subscriptions from one codebase?
+- What do you do if a resource you need isn't in `azurerm` yet?
+- What happens if the object a data source reads doesn't exist?
+- When is a data source read during `plan`, and when during `apply`?
+- `data` or `import`: when to use which?
+- How do you get the subscription ID and object ID of whoever runs Terraform?
+- How do you pass values from one state to another?
+- How do you make a variable required?
+- What does `optional()` do in an `object`?
+- How does `validation` work, and when does it run?
+- `sensitive` or `ephemeral`: which one protects the state?
+- Why can't variables be used in `backend`?
+- How does a `variable` differ from a `local`?
+- How do you pass a secret to Terraform in CI?
+- When do you use a `local`, and when a `variable`?
+- Can a `local` be overridden from outside?
+- What can a `local` refer to?
+- How do you apply common tags to all resources?
+- Why do you need outputs? Give three scenarios.
+- Where does `terraform output` get its values?
+- How does `-raw` differ from `-json` and the normal output?
+- How does a module pass data to the root module?
+- Does `sensitive = true` protect an output's value?
+- What can you read from another state through `terraform_remote_state`?
+- What do the `h1:` and `zh:` hashes mean?
+- Does the lock file pin module versions?
+- How does the lock file differ from a state lock?
+- Declarative vs imperative: what's the difference?
+- What is idempotency, and how does Terraform provide it?
+- Why doesn't the order of blocks matter in Terraform?
+- How do you delete a resource in the declarative approach?
+- Is Ansible declarative or imperative?

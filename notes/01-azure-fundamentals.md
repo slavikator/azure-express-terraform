@@ -1,115 +1,115 @@
-# Тиждень 1. Фундамент Azure
+# Week 1. Azure fundamentals
 
-Що треба знати напам'ять перед тим, як іти далі.
+What you need to know by heart before moving on.
 
-## Абревіатури
+## Abbreviations
 
-| Абревіатура | Розшифровка | Що це, одним реченням |
+| Abbreviation | Stands for | What it is, in one sentence |
 |---|---|---|
-| **ARM** | Azure Resource Manager | Єдиний API Azure, через який працюють портал, `az` і Terraform |
-| **RG** | Resource Group | Логічний контейнер для ресурсів. Видалення RG видаляє все всередині |
-| **RBAC** | Role-Based Access Control | Права за схемою «хто + роль + scope» |
-| **SP** | Service Principal | Обліковий запис для програми (CI, скрипт), а не для людини |
-| **MI** | Managed Identity | SP, яким керує Azure, без секретів. Працює лише для ресурсів в Azure |
-| **Entra ID** | колишній **Azure AD (AAD)** | Каталог користувачів і застосунків. Обидві назви трапляються |
-| **AZ** | Availability Zone | Фізично окремий дата-центр у межах регіону |
-| **OIDC** | OpenID Connect | Вхід за токеном без пароля. Так GitHub входить в Azure без секрету |
-| **MFA** | Multi-Factor Authentication | Вхід з другим фактором. Саме через нього CI не може входити під вашим акаунтом |
-| **CLI** | Command-Line Interface | Тут це `az` |
+| **ARM** | Azure Resource Manager | Azure's single API, used by the portal, `az` and Terraform |
+| **RG** | Resource Group | A logical container for resources. Deleting an RG deletes everything inside |
+| **RBAC** | Role-Based Access Control | Permissions in the form "who + role + scope" |
+| **SP** | Service Principal | An account for a program (CI, a script), not a person |
+| **MI** | Managed Identity | An SP managed by Azure, with no secrets. Works only for resources in Azure |
+| **Entra ID** | formerly **Azure AD (AAD)** | The directory of users and applications. You'll see both names |
+| **AZ** | Availability Zone | A physically separate datacenter within a region |
+| **OIDC** | OpenID Connect | Token-based sign-in without a password. This is how GitHub signs in to Azure without a secret |
+| **MFA** | Multi-Factor Authentication | Sign-in with a second factor. This is exactly why CI can't sign in as your account |
+| **CLI** | Command-Line Interface | Here it means `az` |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
-### 1. Ієрархія
+### 1. Hierarchy
 
 ```
 Tenant (Entra ID)
-└── Management Group      ← необов'язковий рівень
-    └── Subscription      ← рахунок і межа лімітів
+└── Management Group      ← optional level
+    └── Subscription      ← billing account and limits boundary
         └── Resource Group
             └── Resource
 ```
 
-Гроші рахуються на рівні subscription.
+Costs are counted at the subscription level.
 
-#### Tenant чи subscription: як відповісти на співбесіді
+#### Tenant vs subscription: how to answer in an interview
 
-> Tenant — це екземпляр Entra ID, межа ідентичності: там живуть користувачі, групи, service principals, і там відбувається автентифікація. Subscription — це межа ресурсів і білінгу: там створюються ресурси, рахуються витрати і діють квоти. Один tenant може мати багато підписок, але кожна підписка довіряє лише одному tenant'у. Доступ до ресурсів дають ролі Azure RBAC на підписці чи нижче. Ролі Entra ID, як-от Global Administrator, керують ідентичностями і самі по собі доступу до ресурсів не дають.
+> A tenant is an instance of Entra ID, the identity boundary: users, groups and service principals live there, and authentication happens there. A subscription is the resource and billing boundary: resources are created there, costs are counted, and quotas apply. One tenant can have many subscriptions, but each subscription trusts only one tenant. Access to resources is granted by Azure RBAC roles at the subscription level or below. Entra ID roles, such as Global Administrator, manage identities and don't grant access to resources by themselves.
 
-Якщо інтерв'юер хоче глибше:
+If the interviewer wants to go deeper:
 
-- підписку можна перенести в інший tenant, але тоді всі призначення ролей зникнуть, бо principal'и старого tenant'а для неї більше не існують;
-- Global Administrator може тимчасово дати собі доступ до всіх підписок через «Elevate access». Ця опція існує саме тому, що за замовчуванням такого доступу немає.
+- a subscription can be moved to another tenant, but then all role assignments disappear, because the old tenant's principals no longer exist for it;
+- a Global Administrator can temporarily give themselves access to all subscriptions through "Elevate access". This option exists precisely because there's no such access by default.
 
-Дві окремі системи ролей, які легко сплутати:
+Two separate role systems that are easy to mix up:
 
 | | Entra ID roles | Azure RBAC roles |
 |---|---|---|
-| Де діють | в tenant'і (Entra ID) | на ресурсах: management group, підписка, RG, ресурс |
-| Приклади | Global Administrator, User Administrator | Owner, Contributor, Reader |
-| Чим керують | користувачами, групами, застосунками | ресурсами Azure |
+| Where they apply | in the tenant (Entra ID) | on resources: management group, subscription, RG, resource |
+| Examples | Global Administrator, User Administrator | Owner, Contributor, Reader |
+| What they manage | users, groups, applications | Azure resources |
 
-Підписки **не** успадковують ролі від tenant'а. RBAC успадковується через management groups: роль на Tenant Root Group діє на всі підписки під нею.
+Subscriptions do **not** inherit roles from the tenant. RBAC is inherited through management groups: a role on the Tenant Root Group applies to all subscriptions under it.
 
-### 2. RBAC: три складові
+### 2. RBAC: three parts
 
-Кожне призначення ролі відповідає на три питання:
+Every role assignment answers three questions:
 
-| Питання | Відповідь |
+| Question | Answer |
 |---|---|
-| **Хто?** | security principal (user, group, SP, MI) |
-| **Що може?** | role (Reader, Contributor, Owner) |
-| **Де?** | scope (підписка, група, ресурс) |
+| **Who?** | security principal (user, group, SP, MI) |
+| **What can they do?** | role (Reader, Contributor, Owner) |
+| **Where?** | scope (subscription, group, resource) |
 
-Права **успадковуються вниз**: роль на subscription діє на всі RG у ній. Вгору не діють: Contributor на RG не може створити нову RG, бо групи створюються на рівні підписки.
+Permissions are **inherited downward**: a role on a subscription applies to every RG in it. They don't apply upward: a Contributor on an RG can't create a new RG, because groups are created at the subscription level.
 
-**Security principal** — загальна назва для будь-кого, кому можна видати роль:
+**Security principal** is the general name for anything that can be given a role:
 
 ```
 Security principal
-├── User               людина: slavikator@gmail.com
-├── Group              група людей або інших principal
-├── Service principal  програма: github-actions-terraform
-└── Managed identity   ресурс Azure (VM, App Service); технічно теж service principal
+├── User               a person: slavikator@gmail.com
+├── Group              a group of people or other principals
+├── Service principal  a program: github-actions-terraform
+└── Managed identity   an Azure resource (VM, App Service); technically also a service principal
 ```
 
-- **Security principal** — категорія, **service principal** — один з її видів.
-- У `az role assignment list` вид показує поле `principalType` (`User`, `Group`, `ServicePrincipal`), а `principalId` — object ID цього principal.
-- На практиці ролі видають **групам**, а не окремим людям: доступ додається і забирається через членство в групі.
+- **Security principal** is the category, and a **service principal** is one kind of it.
+- In `az role assignment list`, the kind is shown in the `principalType` field (`User`, `Group`, `ServicePrincipal`), and `principalId` is that principal's object ID.
+- In practice, roles are given to **groups** rather than individuals: access is added and removed through group membership.
 
-#### Успадкування ролей RBAC: як відповісти на співбесіді
+#### RBAC role inheritance: how to answer in an interview
 
 ```
 Management group  →  Subscription  →  Resource group  →  Resource
 ```
 
-> Ролі RBAC успадковуються зверху вниз за ієрархією: management group → subscription → resource group → resource. Призначення ролі на будь-якому рівні діє на цей рівень і на все під ним. Права з різних призначень сумуються: якщо в мене Reader на підписці і Contributor на групі, у цій групі я маю Contributor. Обмежити успадковане право на нижчому рівні не можна, переважають лише deny assignments, які ставить сам Azure. Призначення ролі живе на своєму scope: при видаленні групи зникають призначення на ній і на її ресурсах, а призначення на підписці лишаються.
+> RBAC roles are inherited top-down through the hierarchy: management group → subscription → resource group → resource. A role assignment at any level applies to that level and everything below it. Permissions from different assignments add up: if I have Reader on the subscription and Contributor on a group, I have Contributor in that group. You can't restrict an inherited permission at a lower level; only deny assignments, which Azure itself sets, take precedence. A role assignment lives at its scope: when a group is deleted, the assignments on it and its resources disappear, but assignments on the subscription remain.
 
-Що легко сплутати:
+What's easy to mix up:
 
-- **Роль** (role definition, наприклад Contributor) і **призначення ролі** (role assignment: «цей principal має Contributor на цьому scope»). При видаленні групи зникають призначення, а не самі ролі.
-- Група знаходиться **в підписці**, а не навпаки. Тому видалення групи не чіпає призначень на рівні підписки.
+- A **role** (role definition, e.g. Contributor) and a **role assignment** ("this principal has Contributor on this scope"). When a group is deleted, the assignments disappear, not the roles themselves.
+- The group is **inside the subscription**, not the other way around. So deleting a group doesn't touch subscription-level assignments.
 
-У вправі «Обмежений робот» це видно: Reader і Contributor робота на `rg-practice-rbac` зникли разом з групою, а Contributor двох старих SP на підписці лишився.
+You can see this in the "Restricted robot" exercise: the robot's Reader and Contributor on `rg-practice-rbac` disappeared along with the group, while the Contributor of the two old SPs on the subscription stayed.
 
-Принцип **least privilege**: видавати роль на найнижчому достатньому рівні. Наприклад, Contributor на одну RG проєкту, а не на всю підписку.
+The **least privilege** principle: grant a role at the lowest sufficient level. For example, Contributor on one project RG, not on the whole subscription.
 
-### 3. Три базові ролі
+### 3. Three basic roles
 
-| Роль | Ресурси | Видавати ролі |
+| Role | Resources | Assign roles |
 |---|---|---|
-| **Owner** | ✅ все | ✅ |
-| **Contributor** | ✅ все | ❌ |
-| **Reader** | лише перегляд | ❌ |
+| **Owner** | ✅ everything | ✅ |
+| **Contributor** | ✅ everything | ❌ |
+| **Reader** | view only | ❌ |
 
-Плюс **User Access Administrator**: видає ролі, але не керує ресурсами.
+Plus **User Access Administrator**: assigns roles but doesn't manage resources.
 
-#### Чому Contributor не може видавати ролі: як відповісти на співбесіді
+#### Why Contributor can't assign roles: how to answer in an interview
 
-> Щоб запобігти підвищенню привілеїв: якби Contributor міг видавати ролі, він видав би собі Owner, і різниця між ролями зникла б. Тому в Contributor дозволено все, крім дій `Microsoft.Authorization/*/Write` і `Delete`, тобто керування доступом. Це також реалізує розділення обов'язків: керування ресурсами окремо від керування доступом. Видавати ролі можуть Owner, User Access Administrator і Role Based Access Control Administrator, причому останню можна обмежити умовами, які саме ролі дозволено видавати.
+> To prevent privilege escalation: if a Contributor could assign roles, they'd give themselves Owner, and the difference between the roles would disappear. So Contributor is allowed everything except `Microsoft.Authorization/*/Write` and `Delete` actions, i.e. access management. This also implements separation of duties: managing resources is separate from managing access. Roles can be assigned by Owner, User Access Administrator and Role Based Access Control Administrator, and the last one can be restricted with conditions on which roles it may assign.
 
-Терміни: **privilege escalation** — підвищення власних привілеїв; **separation of duties** — розділення обов'язків.
+Terms: **privilege escalation** means raising your own privileges; **separation of duties** means splitting responsibilities.
 
-Як це влаштовано: у Contributor `actions: ["*"]`, а в `notActions` винятки, головні з яких:
+How it works: Contributor has `actions: ["*"]`, and `notActions` lists exceptions, the main ones being:
 
 ```
 Microsoft.Authorization/*/Write
@@ -117,106 +117,106 @@ Microsoft.Authorization/*/Delete
 Microsoft.Authorization/elevateAccess/Action
 ```
 
-Перевірити: `az role definition list --name Contributor --query "[].permissions[].notActions" -o json`
+To check: `az role definition list --name Contributor --query "[].permissions[].notActions" -o json`
 
-Хто може видавати ролі:
+Who can assign roles:
 
-| Роль | Ресурси | Ролі |
+| Role | Resources | Roles |
 |---|---|---|
 | **Owner** | ✅ | ✅ |
 | **User Access Administrator** | ❌ | ✅ |
-| **Role Based Access Control Administrator** | ❌ | ✅, можна обмежити умовами (які ролі і кому) |
+| **Role Based Access Control Administrator** | ❌ | ✅, can be restricted with conditions (which roles, and to whom) |
 | **Contributor** | ✅ | ❌ |
 
-**Наслідок для Terraform:** SP з роллю Contributor не зможе створити `azurerm_role_assignment` — `apply` впаде з `AuthorizationFailed` на `Microsoft.Authorization/roleAssignments/write`. Найбезпечніше рішення — додати Terraform SP роль Role Based Access Control Administrator з умовою, яка дозволяє видавати лише потрібні ролі.
+**The consequence for Terraform:** an SP with the Contributor role can't create an `azurerm_role_assignment`. `apply` fails with `AuthorizationFailed` on `Microsoft.Authorization/roleAssignments/write`. The safest fix is to give the Terraform SP the Role Based Access Control Administrator role, with a condition that only allows assigning the roles you need.
 
-### 4. App registration і service principal
+### 4. App registration and service principal
 
 | | App registration (application object) | Service principal |
 |---|---|---|
-| Що це | «Паспорт» застосунку | «Екземпляр» застосунку в конкретному tenant'і |
-| Що зберігає | Ім'я, **секрети**, сертифікати, federated credentials | **Ролі RBAC** |
-| У моєму проєкті | `github-actions-terraform`, тут лежить `AZURE_CLIENT_SECRET` | Той самий `appId`, але тут видано роль Contributor |
+| What it is | The application's "passport" | The application's "instance" in a specific tenant |
+| What it stores | Name, **secrets**, certificates, federated credentials | **RBAC roles** |
+| In my project | `github-actions-terraform`, where `AZURE_CLIENT_SECRET` lives | The same `appId`, but this is where the Contributor role is assigned |
 
-Тому `az ad sp show` показує порожній `passwordCredentials`: секрет лежить в app registration (`az ad app credential list --id <appId>`).
+That's why `az ad sp show` shows an empty `passwordCredentials`: the secret is in the app registration (`az ad app credential list --id <appId>`).
 
-#### App registration чи service principal: як відповісти на співбесіді
+#### App registration vs service principal: how to answer in an interview
 
-> App registration — це глобальне визначення застосунку, його «паспорт»: ім'я, `appId`, секрети, сертифікати, federated credentials. Він існує в одному home tenant'і. Service principal — це локальний екземпляр застосунку в конкретному tenant'і, його «акаунт». Саме йому видають ролі RBAC, і саме під ним застосунок діє. Вони мають спільний `appId`, але різні object ID. Для single-tenant застосунку вони йдуть парою, і `az ad sp create-for-rbac` створює обидва одразу. Для multi-tenant застосунку на один app registration буде по service principal у кожному tenant'і, де його використовують.
+> An app registration is the global definition of an application, its "passport": name, `appId`, secrets, certificates, federated credentials. It exists in one home tenant. A service principal is the application's local instance in a specific tenant, its "account". This is what RBAC roles are assigned to, and what the application acts as. They share an `appId` but have different object IDs. For a single-tenant application they come as a pair, and `az ad sp create-for-rbac` creates both at once. For a multi-tenant application, one app registration has a service principal in every tenant where it's used.
 
-Якщо інтерв'юер хоче глибше:
+If the interviewer wants to go deeper:
 
-- видалення app registration видаляє і його service principal;
-- managed identity має **лише** service principal, без app registration, тому секретів у неї немає взагалі.
+- deleting an app registration also deletes its service principal;
+- a managed identity has **only** a service principal, with no app registration, so it has no secrets at all.
 
-У вправі «Обмежений робот» це видно: `sp-practice` мав `appId` `0dc751b6-...` і в app registration, і в service principal, а object ID service principal був окремий, `48907eff-...`.
+You can see this in the "Restricted robot" exercise: `sp-practice` had the `appId` `0dc751b6-...` in both the app registration and the service principal, while the service principal's object ID was different, `48907eff-...`.
 
-Три ідентифікатори, які легко сплутати:
+Three identifiers that are easy to mix up:
 
-| Назва | Де трапляється |
+| Name | Where you see it |
 |---|---|
-| `appId` (client ID) | `ARM_CLIENT_ID`, `principalName` у списку ролей |
-| object ID самого SP | `principalId` у списку ролей, `caller` в activity log |
+| `appId` (client ID) | `ARM_CLIENT_ID`, `principalName` in the role list |
+| the SP's own object ID | `principalId` in the role list, `caller` in the activity log |
 | tenant ID | `ARM_TENANT_ID` |
 
-Як SP доводить, хто він:
+How an SP proves who it is:
 
-1. **Client secret**, тобто пароль. Найпростіший і найменш безпечний спосіб.
-2. **Сертифікат.** Безпечніший, але незручний в адмініструванні.
-3. **Federated credential (OIDC).** Пароля немає, Azure довіряє токену від GitHub. Рекомендований спосіб.
+1. **Client secret**, i.e. a password. The simplest and least secure way.
+2. **Certificate.** More secure, but inconvenient to administer.
+3. **Federated credential (OIDC).** There's no password; Azure trusts a token from GitHub. The recommended way.
 
-#### Чому OIDC краще за client secret: як відповісти на співбесіді
+#### Why OIDC is better than a client secret: how to answer in an interview
 
-> Немає довгоживучого секрету, який можна вкрасти. Замість пароля GitHub для кожного запуску видає короткоживучий токен, а Azure перевіряє його за federated credential: хто видав токен (issuer) і для якого репозиторію, гілки чи environment (subject). Токен живе хвилини і приймається лише з дозволеного місця, тож навіть перехоплений він майже марний. До того ж не треба зберігати й ротувати пароль, і CI не зламається через прострочений секрет. У GitHub лежать лише несекретні ідентифікатори: client ID, tenant ID, subscription ID.
+> There's no long-lived secret that can be stolen. Instead of a password, GitHub issues a short-lived token for each run, and Azure checks it against the federated credential: who issued the token (issuer), and for which repository, branch or environment (subject). The token lives for minutes and is only accepted from the allowed place, so even if intercepted it's nearly useless. You also don't need to store and rotate a password, and CI won't break because of an expired secret. GitHub only stores non-secret identifiers: client ID, tenant ID, subscription ID.
 
 | | Client secret | OIDC |
 |---|---|---|
-| Що зберігається в GitHub | пароль | лише ID: client, tenant, subscription |
-| Строк дії | місяці | хвилини |
-| Звідки можна використати | звідки завгодно | лише з вказаного репо, гілки чи environment |
-| Ротація | вручну, інакше CI зламається | не потрібна |
+| What's stored in GitHub | a password | only IDs: client, tenant, subscription |
+| Lifetime | months | minutes |
+| Where it can be used from | anywhere | only from the specified repo, branch or environment |
+| Rotation | by hand, or CI breaks | not needed |
 
-Federated credential — правило з трьох полів:
+A federated credential is a rule with three fields:
 
-| Поле | Приклад |
+| Field | Example |
 |---|---|
 | Issuer | `https://token.actions.githubusercontent.com` |
 | Subject | `repo:slavikator/azure-express-terraform:ref:refs/heads/main` |
 | Audience | `api://AzureADTokenExchange` |
 
-Детальніше і як налаштувати — у `08-security-identity.md`, розділ 4.
+More detail and how to set it up: `08-security-identity.md`, section 4.
 
-### 5. Service principal чи managed identity
+### 5. Service principal or managed identity
 
-- Код працює **в Azure** (VM, App Service, Function) → **managed identity**.
-- Код працює **поза Azure** (GitHub Actions, ноутбук) → **service principal**, бажано з OIDC.
+- The code runs **in Azure** (VM, App Service, Function) → **managed identity**.
+- The code runs **outside Azure** (GitHub Actions, a laptop) → **service principal**, preferably with OIDC.
 
-Критерій — **де працює код**, а не куди він звертається. І MI, і SP можуть ходити в Key Vault, Storage, Microsoft Graph і будь-що, що приймає токени Entra ID.
+The criterion is **where the code runs**, not what it calls. Both MI and SP can access Key Vault, Storage, Microsoft Graph, and anything else that accepts Entra ID tokens.
 
-#### Service principal чи managed identity: як відповісти на співбесіді
+#### Service principal or managed identity: how to answer in an interview
 
-> Критерій — де працює код. Якщо на ресурсі Azure (VM, App Service, Functions, Container Apps, AKS), беру managed identity: Azure сам керує обліковими даними, секретів немає, ротувати нічого не треба. Якщо код працює поза Azure (GitHub Actions, on-premises, інша хмара), managed identity недоступна, тому беру service principal, бажано з federated credential (OIDC), щоб теж обійтися без пароля. Технічно managed identity — це теж service principal, але без app registration, і керує ним Azure.
+> The criterion is where the code runs. If it's on an Azure resource (VM, App Service, Functions, Container Apps, AKS), I use a managed identity: Azure manages the credentials, there are no secrets, and nothing needs rotating. If the code runs outside Azure (GitHub Actions, on-premises, another cloud), managed identity isn't available, so I use a service principal, preferably with a federated credential (OIDC), to also avoid a password. Technically a managed identity is also a service principal, but without an app registration, and Azure manages it.
 
-Якщо інтерв'юер хоче глибше:
+If the interviewer wants to go deeper:
 
-- **system-assigned** MI живе разом з ресурсом і видаляється з ним; **user-assigned** — окремий ресурс, який можна прив'язати до кількох ресурсів;
-- **self-hosted runner** GitHub Actions, запущений на VM в Azure, може використовувати MI цієї VM замість SP. Тобто знову вирішує те, де працює код.
+- a **system-assigned** MI lives with its resource and is deleted with it; a **user-assigned** MI is a separate resource that can be attached to several resources;
+- a GitHub Actions **self-hosted runner** running on a VM in Azure can use that VM's MI instead of an SP. Again, what decides is where the code runs.
 
-### 6. Регіон, availability zone, пара регіонів
+### 6. Region, availability zone, region pair
 
-- **Регіон** — географічна локація (`swedencentral`).
-- **AZ** — окремі дата-центри в регіоні, захищають від аварії одного з них.
-- **Пара регіонів** — для disaster recovery.
+- **Region**: a geographic location (`swedencentral`).
+- **AZ**: separate datacenters within a region; they protect against the failure of one of them.
+- **Region pair**: for disaster recovery.
 
-### 7. ARM як єдиний вхід
+### 7. ARM as the single entry point
 
-Портал, `az` і Terraform перетворюються на запит до ARM API. Тому ресурс, створений у порталі, Terraform не бачить, поки не зробити `import`, і саме тому стейт може розійтися з реальністю.
+The portal, `az` and Terraform all turn into a request to the ARM API. That's why Terraform doesn't see a resource created in the portal until you `import` it, and that's exactly why state can drift from reality.
 
-### 8. Хто видалив ресурс
+### 8. Who deleted a resource
 
-#### Як відповісти на співбесіді
+#### How to answer in an interview
 
-> Для ресурсів Azure — activity log: він фіксує всі операції control plane через ARM. Фільтрую за операціями delete і дивлюся поле `caller`. Для людини там email, для service principal чи managed identity — object ID, який розшифровую через `az ad sp show`. Якщо це SP пайплайна, далі шукаю відповідний запуск CI за часом. Activity log зберігається лише 90 днів, тому в продакшні його експортують через diagnostic settings у Log Analytics і шукають KQL-запитом по таблиці `AzureActivity`. Якщо видалили дані всередині ресурсу (blob, секрет), activity log цього не покаже: потрібні resource logs. Видалення користувачів і застосунків видно в Entra ID audit logs. А щоб критичне взагалі не видалили, ставлю resource locks і обмежую права.
+> For Azure resources, the activity log: it records all control-plane operations through ARM. I filter for delete operations and look at the `caller` field. For a person it's an email; for a service principal or managed identity it's an object ID, which I resolve with `az ad sp show`. If it's the pipeline's SP, I then look for the matching CI run by time. The activity log is only kept for 90 days, so in production it's exported through diagnostic settings to Log Analytics and searched with a KQL query on the `AzureActivity` table. If data inside a resource was deleted (a blob, a secret), the activity log won't show it: you need resource logs. Deletions of users and applications are visible in the Entra ID audit logs. And to make sure critical things can't be deleted at all, I use resource locks and restrict permissions.
 
 #### Activity log
 
@@ -226,30 +226,30 @@ az monitor activity-log list --offset 7d \
   -o table
 ```
 
-- **`caller`** — хто: email для людини, object ID для SP чи MI;
-- **`operationName`** — що зроблено, наприклад `Microsoft.Compute/virtualMachines/delete`;
-- **`correlationId`** — об'єднує всі записи однієї операції (видалення RG дає десятки записів зі спільним `correlationId`).
+- **`caller`**: who it was. An email for a person, an object ID for an SP or MI;
+- **`operationName`**: what was done, e.g. `Microsoft.Compute/virtualMachines/delete`;
+- **`correlationId`**: groups all records of one operation (deleting an RG produces dozens of records sharing a `correlationId`).
 
-Розшифрувати object ID:
+To resolve an object ID:
 
 ```
-az ad sp show --id <objectId> --query displayName -o tsv            # SP або MI
-az ad user show --id <objectId> --query userPrincipalName -o tsv    # людина
+az ad sp show --id <objectId> --query displayName -o tsv            # SP or MI
+az ad user show --id <objectId> --query userPrincipalName -o tsv    # a person
 ```
 
-Якщо це SP пайплайна, шукаю запуск CI за часом (`gh run list`). У моєму проєкті так знайшов, що VM після `destroy` створив `github-actions-terraform` (`5cc14326-...`).
+If it's the pipeline's SP, I look for the CI run by time (`gh run list`). In my project, this is how I found that the VM after `destroy` had been created by `github-actions-terraform` (`5cc14326-...`).
 
-#### Межі activity log
+#### Limits of the activity log
 
-| Обмеження | Що робити |
+| Limitation | What to do |
 |---|---|
-| Зберігається лише **90 днів** | Експорт через **diagnostic settings** у **Log Analytics** або Storage |
-| Не бачить **data plane**: blob, секрет у Key Vault, записи в БД | **Resource logs** через diagnostic settings (`StorageBlobLogs`, `AzureDiagnostics`) |
-| Не бачить змін в **Entra ID**: користувачі, app registrations | **Entra ID audit logs** |
+| Kept for only **90 days** | Export through **diagnostic settings** to **Log Analytics** or Storage |
+| Doesn't see the **data plane**: blobs, Key Vault secrets, database records | **Resource logs** through diagnostic settings (`StorageBlobLogs`, `AzureDiagnostics`) |
+| Doesn't see changes in **Entra ID**: users, app registrations | **Entra ID audit logs** |
 
-Відповідь залежить від того, **що** видалили: ресурс, дані в ньому чи ідентичність.
+The answer depends on **what** was deleted: a resource, data inside it, or an identity.
 
-#### KQL у Log Analytics
+#### KQL in Log Analytics
 
 ```kusto
 AzureActivity
@@ -259,43 +259,43 @@ AzureActivity
 | order by TimeGenerated desc
 ```
 
-#### Профілактика
+#### Prevention
 
-- **Resource locks** (`CanNotDelete`, `ReadOnly`): навіть Owner не видалить ресурс, поки не зніме lock;
-- **least privilege**: менше principal'ів з правом видаляти;
-- **alert** на операції видалення в activity log;
-- **soft delete** (Key Vault, Storage blobs, Recovery Services), щоб видалене можна було відновити.
+- **Resource locks** (`CanNotDelete`, `ReadOnly`): even an Owner can't delete the resource until the lock is removed;
+- **least privilege**: fewer principals with permission to delete;
+- an **alert** on delete operations in the activity log;
+- **soft delete** (Key Vault, Storage blobs, Recovery Services), so deleted items can be restored.
 
-## Команди `az` напам'ять
+## `az` commands to know by heart
 
 ```
 az login
-az account show                  # під ким я і в якій підписці
-az account set -s <id>           # переключити підписку
+az account show                  # who I am and which subscription I'm in
+az account set -s <id>           # switch subscription
 az group list -o table
 az role assignment list --assignee <id> -o table
 az monitor activity-log list --offset 7d -o table
 ```
 
-- Структура команди: `az <сервіс> <ресурс> <дія> --параметри`. Якщо не пам'ятаєте дію, допишіть `--help`.
-- Довгі параметри завжди через `--`: `--id`, а не `-id`.
-- `activity-log list` без `--offset` показує лише останні 6 годин.
-- `--query` (JMESPath) вибирає поля, `-o table`/`json`/`tsv` задає формат.
+- Command structure: `az <service> <resource> <action> --parameters`. If you don't remember the action, add `--help`.
+- Long parameters always use `--`: `--id`, not `-id`.
+- `activity-log list` without `--offset` shows only the last 6 hours.
+- `--query` (JMESPath) selects fields, and `-o table`/`json`/`tsv` sets the format.
 
-## Перевірка себе
+## Check yourself
 
-Поясніть вголос за 2 хвилини, без підглядання:
+Explain out loud in 2 minutes, without looking:
 
-> Що відбувається, коли GitHub Actions запускає `terraform apply`? Як він входить в Azure, звідки знає, що має право, і куди йде запит?
+> What happens when GitHub Actions runs `terraform apply`? How does it sign in to Azure, how does it know it's allowed, and where does the request go?
 
-Відповідь має пройти ланцюжок: SP → токен від Entra ID → запит до ARM → перевірка RBAC → resource provider створює ресурс.
+The answer has to go through the chain: SP → token from Entra ID → request to ARM → RBAC check → resource provider creates the resource.
 
-## Питання співбесіди
+## Interview questions
 
-- Чим tenant відрізняється від subscription?
-- Чим app registration відрізняється від service principal?
-- Service principal чи managed identity: коли що?
-- Як успадковуються ролі RBAC?
-- Чому Contributor не може видавати ролі?
-- Чому OIDC краще за client secret?
-- Як дізнатися, хто видалив ресурс? (Activity log, поле `caller`.)
+- How does a tenant differ from a subscription?
+- How does an app registration differ from a service principal?
+- Service principal or managed identity: when to use which?
+- How are RBAC roles inherited?
+- Why can't a Contributor assign roles?
+- Why is OIDC better than a client secret?
+- How do you find out who deleted a resource? (Activity log, the `caller` field.)

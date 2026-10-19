@@ -1,11 +1,11 @@
-# 1. Resource Group (Контейнер для всіх ресурсів)
+# 1. Resource Group (container for all resources)
 resource "azurerm_resource_group" "rg" {
   name     = "rg-devops-demo-swe"
   location = var.location
   tags     = local.tags
 }
 
-# 2. Virtual Network (Приватна мережа)
+# 2. Virtual Network (private network)
 resource "azurerm_virtual_network" "main" {
   name                = "vnet-demo"
   address_space       = ["10.0.0.0/16"]
@@ -14,7 +14,7 @@ resource "azurerm_virtual_network" "main" {
   tags                = local.tags
 }
 
-# 3. Subnet (Підмережа для нашої VM)
+# 3. Subnet (subnet for our VM)
 resource "azurerm_subnet" "main" {
   name                 = "snet-internal"
   resource_group_name  = azurerm_resource_group.rg.name

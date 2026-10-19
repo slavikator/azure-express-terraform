@@ -1,24 +1,24 @@
-# Практика тижня 2. «Наводимо лад у коді»
+# Week 2 practice: "Tidying up the code"
 
-**Мета:** переписати власний проєкт за правилами з тижня 2: lock-файл у git, змінні з перевіркою, спільні теги, data source і output. І щоразу перед `apply` передбачити, що покаже `plan`.
+**Goal:** rewrite your own project following the week 2 rules: the lock file in git, validated variables, common tags, a data source and outputs. And before every `apply`, predict what `plan` will show.
 
-**Теми:** lock-файл, змінні, `validation`, пріоритет значень змінних, `locals`, `data`, `output`, граф залежностей.
+**Topics:** lock file, variables, `validation`, variable value precedence, `locals`, `data`, `output`, dependency graph.
 
-**Час:** 1,5–2 години, можна за два заходи. **Вартість:** близько $0,05 на годину, поки працює VM. Наприкінці буде `destroy`.
+**Time:** 1.5–2 hours, can be split into two sessions. **Cost:** about $0.05 per hour while the VM is running. There's a `destroy` at the end.
 
-**Конспект:** [`02-terraform-basics.md`](02-terraform-basics.md)
-
----
-
-## Правило всієї практики
-
-Перед кожним `terraform plan` **спершу вгадайте**, що він покаже: скільки ресурсів, `+`, `~` чи `-/+`. Потім порівняйте з реальним виводом. Саме так тренується читання плану.
+**Notes:** [`02-terraform-basics.md`](02-terraform-basics.md)
 
 ---
 
-## Крок 0. Підніміть інфраструктуру
+## The rule for the whole practice
 
-Щоб бачити, як зміни в коді впливають на ресурси, вони мають існувати.
+Before every `terraform plan`, **guess first** what it will show: how many resources, `+`, `~` or `-/+`. Then compare with the real output. This is how you train reading plans.
+
+---
+
+## Step 0. Bring up the infrastructure
+
+To see how code changes affect resources, the resources have to exist.
 
 ```
 terraform init
@@ -26,68 +26,68 @@ terraform plan
 terraform apply
 ```
 
-> ❓ **1.** Скільки ресурсів створив `apply`? Знайдіть їх усі у виводі `terraform state list`.
+> ❓ **1.** How many resources did `apply` create? Find all of them in the output of `terraform state list`.
 
-## Крок 1. Lock-файл у git
+## Step 1. The lock file in git
 
-Відкрийте `.gitignore` і видаліть рядок `.terraform.lock.hcl`. Потім подивіться, що всередині файлу:
+Open `.gitignore` and delete the `.terraform.lock.hcl` line. Then look at what's inside the file:
 
 ```
 cat .terraform.lock.hcl
 git status
 ```
 
-> ❓ **2.** Яка версія `azurerm` зафіксована? Що означають рядки `h1:` і `zh:`?
+> ❓ **2.** Which `azurerm` version is pinned? What do the `h1:` and `zh:` lines mean?
 >
-> ❓ **3.** Що станеться в CI, якщо lock-файлу в репо немає, а HashiCorp випустить нову версію провайдера в межах `~> 3.0`?
+> ❓ **3.** What happens in CI if the lock file isn't in the repo, and HashiCorp releases a new provider version within `~> 3.0`?
 
-Lock-файл, створений на Mac, може не містити всіх хешів для Linux, де працює CI. Додайте їх явно:
+A lock file created on a Mac may not contain all the hashes for Linux, where CI runs. Add them explicitly:
 
 ```
 terraform providers lock -platform=linux_amd64 -platform=darwin_arm64
 ```
 
-## Крок 2. Змінні з перевіркою
+## Step 2. Validated variables
 
-Створіть у `variables.tf` дві змінні:
+Create two variables in `variables.tf`:
 
-- `location` з типом `string`, значенням за замовчуванням `"swedencentral"` і `validation`, що дозволяє лише `swedencentral` і `northeurope`;
-- `vm_size` з типом `string` і значенням за замовчуванням `"Standard_B2ls_v2"`.
+- `location`, of type `string`, with the default `"swedencentral"` and a `validation` that allows only `swedencentral` and `northeurope`;
+- `vm_size`, of type `string`, with the default `"Standard_B2ls_v2"`.
 
-Замініть ними жорстко прописані значення: `location` у resource group (`network.tf`) і `size` у VM (`compute.tf`). Інші ресурси вже беруть регіон з `azurerm_resource_group.rg.location`, їх не чіпайте.
+Use them to replace the hard-coded values: `location` in the resource group (`network.tf`) and `size` in the VM (`compute.tf`). The other resources already take the region from `azurerm_resource_group.rg.location`, so leave them alone.
 
 ```
 terraform plan
 ```
 
-> ❓ **4.** Що показав `plan` і чому?
+> ❓ **4.** What did `plan` show, and why?
 
-Перевірте `validation`:
+Test the `validation`:
 
 ```
 terraform plan -var="location=mars"
 ```
 
-> ❓ **5.** Яку помилку ви отримали? Чи дійшов Terraform до звернення в Azure?
+> ❓ **5.** What error did you get? Did Terraform get as far as calling Azure?
 
-## Крок 3. Звідки береться значення змінної
+## Step 3. Where a variable's value comes from
 
-Спробуйте по черзі і щоразу дивіться лише на рядок `Plan:` і на позначку біля resource group:
+Try these one at a time, and each time look only at the `Plan:` line and at the marker next to the resource group:
 
 ```
 TF_VAR_location=northeurope terraform plan
 TF_VAR_location=northeurope terraform plan -var="location=swedencentral"
 ```
 
-> ❓ **6.** Яке значення перемогло в другій команді і чому?
+> ❓ **6.** Which value won in the second command, and why?
 >
-> ❓ **7.** У першій команді біля resource group стоїть `-/+`. Чому зміна регіону вимагає пересоздання? Що буде з рештою ресурсів?
+> ❓ **7.** In the first command, the resource group is marked `-/+`. Why does changing the region require recreation? What happens to the other resources?
 
-**Не робіть `apply` з `northeurope`.**
+**Don't run `apply` with `northeurope`.**
 
-## Крок 4. Спільні теги через `locals`
+## Step 4. Common tags through `locals`
 
-Створіть `locals.tf`:
+Create `locals.tf`:
 
 ```hcl
 locals {
@@ -99,30 +99,30 @@ locals {
 }
 ```
 
-Додайте `tags = local.tags` до кожного ресурсу, який підтримує теги. Перевіряйте документацію ресурсу на registry.terraform.io, якщо не впевнені.
+Add `tags = local.tags` to every resource that supports tags. Check the resource's documentation on registry.terraform.io if you're not sure.
 
-> ❓ **8.** Які ресурси вашого проєкту **не** підтримують теги і чому?
+> ❓ **8.** Which resources in your project **don't** support tags, and why?
 
 ```
 terraform plan
 ```
 
-> ❓ **9.** Скільки ресурсів буде змінено і з якою позначкою: `~` чи `-/+`? Чому теги не вимагають пересоздання?
+> ❓ **9.** How many resources will change, and with which marker: `~` or `-/+`? Why don't tags require recreation?
 
 ```
 terraform apply
 az group show -n rg-devops-demo-swe --query tags
 ```
 
-## Крок 5. `data` і `output`
+## Step 5. `data` and `output`
 
-Додайте в код:
+Add to the code:
 
 ```hcl
 data "azurerm_client_config" "current" {}
 ```
 
-І в будь-який файл (краще створити `outputs.tf` і перенести туди `vm_public_ip`) додайте два outputs: `subscription_id` і `tenant_id` з цього data source.
+And in any file (better: create `outputs.tf` and move `vm_public_ip` there), add two outputs: `subscription_id` and `tenant_id` from this data source.
 
 ```
 terraform plan
@@ -131,25 +131,25 @@ terraform output
 terraform output -raw subscription_id
 ```
 
-> ❓ **10.** Чим `data "azurerm_client_config"` відрізняється від `resource`? Чи створює він щось в Azure?
+> ❓ **10.** How does `data "azurerm_client_config"` differ from a `resource`? Does it create anything in Azure?
 >
-> ❓ **11.** Під ким увійшов Terraform, тобто чий `client_id` віддасть цей data source локально і чий у CI?
+> ❓ **11.** Who did Terraform sign in as, i.e. whose `client_id` will this data source return locally, and whose in CI?
 
-## Крок 6. Граф залежностей
+## Step 6. The dependency graph
 
 ```
 terraform graph > graph.dot
 ```
 
-Вставте вміст `graph.dot` у будь-який онлайн-рендерер Graphviz (наприклад, пошук «graphviz online») або встановіть локально: `brew install graphviz`, потім `dot -Tsvg graph.dot > graph.svg` і відкрийте `graph.svg`.
+Paste the contents of `graph.dot` into any online Graphviz renderer (for example, search for "graphviz online"), or install it locally: `brew install graphviz`, then `dot -Tsvg graph.dot > graph.svg`, and open `graph.svg`.
 
-> ❓ **12.** Знайдіть ланцюжок від resource group до VM. Через які ресурси він проходить?
+> ❓ **12.** Find the chain from the resource group to the VM. Which resources does it pass through?
 >
-> ❓ **13.** Які ресурси не залежать один від одного і тому створюються паралельно?
+> ❓ **13.** Which resources don't depend on each other, and are therefore created in parallel?
 
-`graph.dot` і `graph.svg` у git не додавайте.
+Don't add `graph.dot` and `graph.svg` to git.
 
-## Крок 7. Перевірка і пуш
+## Step 7. Check and push
 
 ```
 terraform fmt -recursive
@@ -157,17 +157,17 @@ terraform validate
 terraform plan
 ```
 
-Останній `plan` має показати `No changes`. Закомітьте все: зміни в коді, `.gitignore` і `.terraform.lock.hcl`.
+The last `plan` must show `No changes`. Commit everything: code changes, `.gitignore` and `.terraform.lock.hcl`.
 
 ```
 git add -A && git commit -m "refactor: variables, tags, outputs, lock file" && git push
 ```
 
-Відкрийте лог кроку **Terraform Plan** у GitHub Actions.
+Open the log of the **Terraform Plan** step in GitHub Actions.
 
-> ❓ **14.** Що показав `plan` у CI і чому саме це? Зверніть увагу: CI бере ті ж змінні зі значеннями за замовчуванням, а `ssh_public_key` із секрету.
+> ❓ **14.** What did `plan` show in CI, and why exactly that? Note: CI uses the same variables with their default values, and `ssh_public_key` from a secret.
 
-## Крок 8. Прибирання
+## Step 8. Cleanup
 
 ```
 terraform destroy
@@ -176,18 +176,18 @@ az group exists -n rg-devops-demo-swe
 
 ---
 
-## Результат
+## Outcome
 
-Після практики ви маєте вміти без підглядання пояснити:
+After the practice you should be able to explain, without looking:
 
-- навіщо комітити lock-файл;
-- як працює `validation` і коли вона спрацьовує;
-- у якому порядку Terraform бере значення змінних;
-- різницю між `~` і `-/+` у плані і що її викликає;
-- різницю між `resource` і `data`;
-- як Terraform визначає порядок створення ресурсів.
+- why you commit the lock file;
+- how `validation` works and when it runs;
+- in what order Terraform takes variable values;
+- the difference between `~` and `-/+` in a plan, and what causes it;
+- the difference between `resource` and `data`;
+- how Terraform determines the order in which resources are created.
 
-## Мої відповіді
+## My answers
 
 1.
 2.

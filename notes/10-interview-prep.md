@@ -1,135 +1,135 @@
-# Тиждень 10. Фінальна підготовка
+# Week 10. Final preparation
 
-Зібрати знання в розповідь і потренуватися відповідати.
+Turn your knowledge into a story and practice answering.
 
-## Терміни
+## Terms
 
-| Абревіатура / термін | Розшифровка | Що це, одним реченням |
+| Abbreviation / term | Stands for | What it is, in one sentence |
 |---|---|---|
-| **Bicep** | | Мова IaC від Microsoft лише для Azure, компілюється в ARM templates |
-| **ARM template** | | JSON-опис ресурсів Azure, «нативний» IaC |
-| **Pulumi** | | IaC звичайними мовами програмування (TypeScript, Python, Go) |
-| **HA** | High Availability | Система працює далі при збої окремих компонентів |
-| **DR** | Disaster Recovery | Відновлення після аварії регіону чи втрати даних |
-| **RTO** | Recovery Time Objective | За який час система має відновитися |
-| **RPO** | Recovery Point Objective | Скільки даних допустимо втратити (за часом) |
-| **WAF** | Well-Architected Framework | П'ять принципів Azure: надійність, безпека, вартість, операційна досконалість, продуктивність |
-| **STAR** | Situation, Task, Action, Result | Схема розповіді про досвід на співбесіді |
-| **FinOps** | | Практика керування хмарними витратами |
+| **Bicep** | | Microsoft's IaC language for Azure only; compiles to ARM templates |
+| **ARM template** | | A JSON description of Azure resources, the "native" IaC |
+| **Pulumi** | | IaC in regular programming languages (TypeScript, Python, Go) |
+| **HA** | High Availability | The system keeps working when individual components fail |
+| **DR** | Disaster Recovery | Recovering after a region failure or data loss |
+| **RTO** | Recovery Time Objective | How quickly the system must recover |
+| **RPO** | Recovery Point Objective | How much data it's acceptable to lose (measured in time) |
+| **WAF** | Well-Architected Framework | Azure's five pillars: reliability, security, cost, operational excellence, performance |
+| **STAR** | Situation, Task, Action, Result | A structure for telling an experience story in an interview |
+| **FinOps** | | The practice of managing cloud costs |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
 ### 1. Terraform, Bicep, ARM, Pulumi
 
 | | Terraform | Bicep | ARM template | Pulumi |
 |---|---|---|---|---|
-| Хмари | будь-які | лише Azure | лише Azure | будь-які |
-| Мова | HCL | Bicep | JSON | TS, Python, Go, C# |
-| Стейт | файл, яким керуєте ви | немає, стан бере з Azure | немає | сервіс або файл |
-| Нові можливості Azure | із затримкою, поки оновиться провайдер | одразу | одразу | із затримкою |
-| Preview змін | `plan` | `what-if` | `what-if` | `preview` |
+| Clouds | any | Azure only | Azure only | any |
+| Language | HCL | Bicep | JSON | TS, Python, Go, C# |
+| State | a file you manage | none, state comes from Azure | none | a service or a file |
+| New Azure features | delayed until the provider is updated | immediately | immediately | delayed |
+| Preview of changes | `plan` | `what-if` | `what-if` | `preview` |
 
-**Як відповідати «що оберете»:** команда лише на Azure без досвіду Terraform → Bicep: немає стейту, новинки Azure одразу. Кілька хмар або SaaS-провайдерів (GitHub, Cloudflare, Datadog), команда вже знає Terraform, потрібна велика екосистема модулів → Terraform.
+**How to answer "which would you choose":** a team that's Azure-only and has no Terraform experience → Bicep: no state, new Azure features immediately. Several clouds or SaaS providers (GitHub, Cloudflare, Datadog), a team that already knows Terraform, a need for a large module ecosystem → Terraform.
 
-### 2. System design: вебзастосунок в Azure
+### 2. System design: a web application in Azure
 
-Схема, яку варто вміти намалювати й пояснити:
+A diagram you should be able to draw and explain:
 
 ```
-Користувач
+User
    │
-Front Door (WAF, глобальний вхід, CDN)
+Front Door (WAF, global entry point, CDN)
    │
-Application Gateway / або напряму App Service
+Application Gateway / or App Service directly
    │
-App Service або Container Apps (кілька інстансів, availability zones)
+App Service or Container Apps (several instances, availability zones)
    │  managed identity
-   ├── Key Vault (секрети)
-   ├── Azure SQL / PostgreSQL Flexible (zone-redundant, геореплікація для DR)
-   └── Storage (ZRS або GZRS)
+   ├── Key Vault (secrets)
+   ├── Azure SQL / PostgreSQL Flexible (zone-redundant, geo-replication for DR)
+   └── Storage (ZRS or GZRS)
    │
 Log Analytics + Application Insights + alerts
 ```
 
-Що обов'язково проговорити:
-- **Мережа:** VNet, private endpoints для БД і Key Vault, без публічного доступу до даних.
-- **Ідентичність:** managed identity замість паролів, RBAC з мінімальними правами.
-- **Надійність:** availability zones, autoscale, бекапи, план DR з RTO і RPO.
-- **Деплой:** IaC, CI/CD з plan на PR і підтвердженням apply, deployment slots.
-- **Моніторинг:** метрики, логи, alerts.
-- **Вартість:** розмір під навантаження, autoscale, reserved instances.
+What you must cover:
+- **Network:** VNet, private endpoints for the database and Key Vault, no public access to data.
+- **Identity:** managed identity instead of passwords, RBAC with least privilege.
+- **Reliability:** availability zones, autoscale, backups, a DR plan with RTO and RPO.
+- **Deployment:** IaC, CI/CD with plan on PR and approved apply, deployment slots.
+- **Monitoring:** metrics, logs, alerts.
+- **Cost:** sizing for the load, autoscale, reserved instances.
 
-### 3. Оптимізація витрат
+### 3. Cost optimization
 
-- Правильний розмір (right-sizing) за метриками використання.
-- **Reserved instances** і **savings plans** — знижка за зобов'язання на 1–3 роки.
-- **Spot VM** — до 90% дешевше, але Azure може забрати VM. Для пакетних задач.
-- Autoscale і масштабування до нуля (Container Apps, Functions).
-- Вимикати dev на ніч і вихідні.
-- Рівні зберігання (Hot, Cool, Archive) і lifecycle-політики.
-- Бюджети й alerts, теги для розподілу витрат між командами.
-- Видаляти «сирітські» ресурси: диски без VM, невикористані public IP.
+- Right-sizing based on usage metrics.
+- **Reserved instances** and **savings plans**: a discount for a 1–3 year commitment.
+- **Spot VMs**: up to 90% cheaper, but Azure can take the VM back. For batch jobs.
+- Autoscale and scaling to zero (Container Apps, Functions).
+- Shutting down dev overnight and on weekends.
+- Storage tiers (Hot, Cool, Archive) and lifecycle policies.
+- Budgets and alerts, tags for splitting costs between teams.
+- Deleting "orphaned" resources: disks without a VM, unused public IPs.
 
-### 4. Міграція ручної інфраструктури в Terraform
+### 4. Migrating manual infrastructure into Terraform
 
-1. Інвентаризація: `az resource list`, Azure Resource Graph.
-2. Код для ресурсів (вручну, `terraform plan -generate-config-out`, або aztfexport).
-3. Блоки `import`.
-4. `plan` має показати `No changes`. Вирівнювати код, поки так не буде.
-5. Заборонити ручні зміни: RBAC, Azure Policy, drift detection.
+1. Inventory: `az resource list`, Azure Resource Graph.
+2. Code for the resources (by hand, `terraform plan -generate-config-out`, or aztfexport).
+3. `import` blocks.
+4. `plan` must show `No changes`. Keep aligning the code until it does.
+5. Forbid manual changes: RBAC, Azure Policy, drift detection.
 
-### 5. Terraform для кількох команд
+### 5. Terraform for several teams
 
-- Модулі в окремому репозиторії з версіями (теги), або Azure Verified Modules.
-- Окремі стейти для команд і середовищ, окремі SP з правами лише на своє.
-- Стандарти: обов'язкові теги, політики, шаблон репозиторію.
-- Перевірки в CI: fmt, validate, tflint, checkov, Infracost.
-- Платформна команда підтримує модулі й пайплайни, продуктові команди їх використовують.
+- Modules in a separate repository with versions (tags), or Azure Verified Modules.
+- Separate states for teams and environments, separate SPs with permissions only for their own scope.
+- Standards: required tags, policies, a repository template.
+- CI checks: fmt, validate, tflint, checkov, Infracost.
+- A platform team maintains the modules and pipelines; product teams use them.
 
-## Мої історії для співбесіди (STAR)
+## My interview stories (STAR)
 
-### Історія 1. CI зависав на `terraform init`
-- **Situation:** після рефакторингу пайплайн GitHub Actions висів на кроці `terraform init`.
-- **Task:** знайти причину і зробити пайплайн надійним.
-- **Action:** з'ясував, що блок `backend "azurerm"` став порожнім. Локально параметри були введені інтерактивно і збереглися в `.terraform/`, а в CI Terraform чекав вводу. Прописав конфігурацію бекенду явно і додав `-input=false` до всіх команд.
-- **Result:** init проходить. Якщо параметрів забракне, крок одразу впаде з помилкою, а не висітиме. Висновок: у CI завжди `-input=false`.
+### Story 1. CI hung on `terraform init`
+- **Situation:** after a refactor, the GitHub Actions pipeline hung on the `terraform init` step.
+- **Task:** find the cause and make the pipeline reliable.
+- **Action:** I found that the `backend "azurerm"` block had become empty. Locally the parameters had been entered interactively and saved in `.terraform/`, but in CI Terraform waited for input. I wrote the backend configuration explicitly and added `-input=false` to all commands.
+- **Result:** init passes. If parameters are missing, the step fails right away with an error instead of hanging. The lesson: always use `-input=false` in CI.
 
-### Історія 2. Стейт розійшовся з Azure
-- **Situation:** `apply` впав з помилкою `ManagedEnvironmentNoAvailableCapacityInRegion`, але Azure пізніше все одно створив Container Apps environment.
-- **Task:** привести стейт у відповідність з реальністю.
-- **Action:** знайшов ресурс через `az`, спробував `import`, але `provisioningState` самого сервісу виявився `Failed`, хоча загальний статус ресурсу показував `Succeeded`. Прибрав його зі стейту (`state rm`), видалив і переніс environment в інший регіон.
-- **Result:** інфраструктура піднялася. Висновки: перевіряти стан конкретного сервісу, а не загальний статус ресурсу; знати ліміти підписки (на trial лише один environment).
+### Story 2. State diverged from Azure
+- **Situation:** `apply` failed with `ManagedEnvironmentNoAvailableCapacityInRegion`, but Azure later created the Container Apps environment anyway.
+- **Task:** bring the state back in line with reality.
+- **Action:** I found the resource with `az` and tried `import`, but the service's own `provisioningState` turned out to be `Failed`, even though the general resource status showed `Succeeded`. I removed it from the state (`state rm`), deleted it, and moved the environment to another region.
+- **Result:** the infrastructure came up. The lessons: check the state of the specific service, not the general resource status; know the subscription's limits (a trial allows only one environment).
 
-### Історія 3. Провайдер без верхньої межі версії
-- **Situation:** `terraform destroy` двічі падав з `polling support ... was not implemented`.
-- **Task:** коректно прибрати інфраструктуру.
-- **Action:** з'ясував, що обмеження `>= 3.118.0` підтягнуло azurerm 5.8.0 з багом. Ресурси в Azure видалялися, а стейт ні. Перевірив реальний стан через `az`, запустив `destroy` повторно: refresh побачив, що ресурсів уже немає.
-- **Result:** інфраструктуру прибрано. Зафіксував версії через `~>` і додав lock-файл у git.
+### Story 3. A provider without an upper version bound
+- **Situation:** `terraform destroy` failed twice with `polling support ... was not implemented`.
+- **Task:** cleanly remove the infrastructure.
+- **Action:** I found that the constraint `>= 3.118.0` had pulled in azurerm 5.8.0, which had a bug. Resources were deleted in Azure, but not from the state. I checked the real state with `az` and ran `destroy` again: refresh saw that the resources were already gone.
+- **Result:** the infrastructure was removed. I pinned versions with `~>` and added the lock file to git.
 
-### Історія 4. CI підняв інфраструктуру після `destroy`
-- **Situation:** після ручного `destroy` пуш коміту з конспектом знову створив VM.
-- **Action:** через activity log знайшов, що ресурси створив service principal CI. Причина: `apply` при кожному пуші в main.
-- **Result:** залишив на пуші лише `plan`, а `apply` запускаю вручну. Висновок: пайплайн з авто-apply і ручні зміни конфліктують, потрібне явне підтвердження.
+### Story 4. CI brought the infrastructure back after `destroy`
+- **Situation:** after a manual `destroy`, pushing a commit with notes created the VM again.
+- **Action:** through the activity log I found that the resources had been created by the CI service principal. The cause: `apply` on every push to main.
+- **Result:** I left only `plan` on push, and I run `apply` manually. The lesson: a pipeline with auto-apply conflicts with manual changes; you need explicit approval.
 
-Розкажіть кожну вголос за 2 хвилини.
+Tell each one out loud in 2 minutes.
 
-## Іспити
+## Exams
 
-- **Terraform Associate (HashiCorp):** основи Terraform, стейт, модулі, workflow, Terraform Cloud. Тижні 2–6 і 9 цього плану покривають більшість тем.
-- **AZ-104 (Azure Administrator):** ідентичність, RBAC, мережі, обчислення, storage, моніторинг. Тижні 1, 4, 7, 8.
-- **AZ-400 (DevOps Engineer):** наступний крок після AZ-104.
+- **Terraform Associate (HashiCorp):** Terraform basics, state, modules, workflow, Terraform Cloud. Weeks 2–6 and 9 of this plan cover most topics.
+- **AZ-104 (Azure Administrator):** identity, RBAC, networking, compute, storage, monitoring. Weeks 1, 4, 7, 8.
+- **AZ-400 (DevOps Engineer):** the next step after AZ-104.
 
-## Перевірка себе
+## Check yourself
 
-Проведіть інтерв'юера через свій проєкт за 5 хвилин: архітектура, чому обрали саме ці сервіси, як влаштовані стейт і CI/CD, що зламалося і як ви це полагодили. Потім попросіть Claude провести mock-інтерв'ю: 10 питань по Terraform і Azure з розбором відповідей.
+Walk an interviewer through your project in 5 minutes: the architecture, why you chose these services, how state and CI/CD work, what broke and how you fixed it. Then ask Claude for a mock interview: 10 Terraform and Azure questions with feedback on your answers.
 
-## Питання співбесіди
+## Interview questions
 
-- Розкажіть про найскладнішу проблему з інфраструктурою, яку ви вирішили.
-- Terraform чи Bicep для нової Azure-компанії?
-- Спроєктуйте інфраструктуру для вебзастосунку з HA і DR.
-- Що таке RTO і RPO? Як їх забезпечити?
-- Як би ви організували Terraform для п'яти команд?
-- Як мігрувати вручну створену інфраструктуру в Terraform?
-- Як зменшити витрати на Azure?
-- Що б ви покращили у своєму проєкті, якби мали ще тиждень?
+- Tell me about the hardest infrastructure problem you've solved.
+- Terraform or Bicep for a new Azure company?
+- Design infrastructure for a web application with HA and DR.
+- What are RTO and RPO? How do you achieve them?
+- How would you organize Terraform for five teams?
+- How do you migrate manually created infrastructure into Terraform?
+- How do you reduce Azure costs?
+- What would you improve in your project if you had another week?

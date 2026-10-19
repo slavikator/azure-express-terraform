@@ -1,38 +1,38 @@
-# Тиждень 3. Стейт
+# Week 3. State
 
-Найважливіша тема на співбесіді. Що таке стейт, як він ламається і як його лагодити.
+The most important interview topic. What state is, how it breaks, and how to fix it.
 
-## Терміни
+## Terms
 
-| Термін | Що це, одним реченням |
+| Term | What it is, in one sentence |
 |---|---|
-| **State** | JSON-файл, де Terraform зберігає зв'язок «ресурс у коді ↔ реальний об'єкт в Azure» |
-| **Backend** | Де зберігається стейт: локально чи віддалено (Azure Storage, S3, Terraform Cloud) |
-| **Remote state** | Стейт у спільному сховищі, доступний CI і команді |
-| **State lock** | Блокування, яке не дає двом процесам змінювати стейт одночасно |
-| **Lease** | Механізм блокування blob'а в Azure Storage. Так працює lock бекенду `azurerm` |
-| **Drift** | Розбіжність між стейтом і реальним станом Azure (хтось змінив щось руками) |
-| **Refresh** | Перечитування реального стану ресурсів перед plan і apply |
-| **Import** | Взяти під керування Terraform ресурс, створений поза ним |
-| **Taint / replace** | Позначити ресурс для пересоздання |
+| **State** | A JSON file where Terraform stores the link "resource in code ↔ real object in Azure" |
+| **Backend** | Where the state is stored: locally or remotely (Azure Storage, S3, Terraform Cloud) |
+| **Remote state** | State in shared storage, accessible to CI and the team |
+| **State lock** | A lock that stops two processes from changing the state at the same time |
+| **Lease** | The locking mechanism for a blob in Azure Storage. This is how the `azurerm` backend lock works |
+| **Drift** | A mismatch between the state and the real state of Azure (someone changed something by hand) |
+| **Refresh** | Re-reading the real state of resources before plan and apply |
+| **Import** | Bringing a resource created outside Terraform under its management |
+| **Taint / replace** | Marking a resource for recreation |
 
-## Поняття, які треба вміти пояснити своїми словами
+## Concepts you need to explain in your own words
 
-### 1. Навіщо стейт
+### 1. Why state exists
 
-Terraform не шукає ресурси в Azure за іменами. Він знає про ресурс лише тому, що той записаний у стейті з ID:
+Terraform doesn't search Azure for resources by name. It only knows about a resource because the resource is recorded in the state with its ID:
 
 ```
 azurerm_resource_group.rg  →  /subscriptions/.../resourceGroups/rg-devops-demo-swe
 ```
 
-`plan` порівнює три речі: **код** (що має бути), **стейт** (що Terraform створив) і **реальний Azure** (що є зараз).
+`plan` compares three things: the **code** (what should exist), the **state** (what Terraform created) and **real Azure** (what exists now).
 
-Що зберігає стейт:
-- ID і всі атрибути кожного ресурсу;
-- залежності між ресурсами;
-- значення outputs;
-- **секрети**: паролі, ключі, connection strings відкритим текстом.
+What the state stores:
+- the ID and all attributes of every resource;
+- dependencies between resources;
+- output values;
+- **secrets**: passwords, keys, connection strings, in plain text.
 
 ### 2. Remote backend `azurerm`
 
@@ -47,53 +47,53 @@ terraform {
 }
 ```
 
-- Стейт лежить як blob у storage account.
-- Під час `plan` чи `apply` Terraform бере **lease** на цей blob. Другий процес побачить `Error acquiring the state lock` і не зіпсує стейт.
-- У блоці `backend` **не можна** використовувати змінні. Тому значення або пишуть явно, або передають через `-backend-config`.
+- The state is stored as a blob in a storage account.
+- During `plan` or `apply`, Terraform takes a **lease** on that blob. A second process gets `Error acquiring the state lock` and won't corrupt the state.
+- Variables **can't** be used in the `backend` block. So the values are either written explicitly or passed through `-backend-config`.
 
-Часткова конфігурація:
+Partial configuration:
 
 ```hcl
-backend "azurerm" {}          # порожній блок
+backend "azurerm" {}          # empty block
 ```
 
 ```
 terraform init -backend-config=backend.hcl
-# або
+# or
 terraform init -backend-config="key=prod.tfstate"
 ```
 
-**Історія з мого проєкту:** блок був порожній, а `-backend-config` у CI не передавали. `terraform init` чекав інтерактивного вводу, і CI зависав.
+**A story from my project:** the block was empty, and CI didn't pass `-backend-config`. `terraform init` waited for interactive input, and CI hung.
 
-### 3. Як захистити стейт
+### 3. How to protect state
 
-- Окрема RG для стейту (`rg-tfstate`), щоб `destroy` проєкту його не видалив.
-- Без публічного доступу до storage account, доступ через RBAC.
-- **Blob versioning** або soft delete, щоб відновити зіпсований стейт.
-- Мінімум людей з доступом: хто читає стейт, той бачить секрети.
+- A separate RG for the state (`rg-tfstate`), so the project's `destroy` doesn't delete it.
+- No public access to the storage account; access through RBAC.
+- **Blob versioning** or soft delete, to restore a corrupted state.
+- As few people with access as possible: whoever reads the state sees the secrets.
 
-### 4. Команди роботи зі стейтом
+### 4. State commands
 
-| Команда | Що робить | Чи чіпає Azure |
+| Command | What it does | Does it touch Azure |
 |---|---|---|
-| `state list` | список ресурсів у стейті | ні |
-| `state show <адреса>` | атрибути ресурсу зі стейту | ні |
-| `state mv <стара> <нова>` | перейменувати адресу ресурсу | ні |
-| `state rm <адреса>` | забути ресурс | ні, ресурс лишається в Azure |
-| `import <адреса> <id>` | записати існуючий ресурс у стейт | лише читає |
-| `force-unlock <lock id>` | зняти завислий lock | ні |
-| `destroy` | видалити ресурси | **так, видаляє** |
+| `state list` | list the resources in the state | no |
+| `state show <address>` | a resource's attributes from the state | no |
+| `state mv <old> <new>` | rename a resource's address | no |
+| `state rm <address>` | forget a resource | no, the resource stays in Azure |
+| `import <address> <id>` | write an existing resource into the state | reads only |
+| `force-unlock <lock id>` | release a stuck lock | no |
+| `destroy` | delete resources | **yes, deletes** |
 
-Головна різниця: `state rm` прибирає ресурс лише зі стейту, а `destroy` видаляє його в Azure.
+The key difference: `state rm` removes a resource only from the state, while `destroy` deletes it in Azure.
 
-### 5. Import: блоком і командою
+### 5. Import: block vs command
 
-Старий спосіб, команда:
+The old way, a command:
 ```
 terraform import azurerm_resource_group.rg /subscriptions/<id>/resourceGroups/rg-manual
 ```
 
-Новий спосіб (Terraform 1.5+), блок у коді, проходить через `plan`:
+The new way (Terraform 1.5+), a block in the code that goes through `plan`:
 ```hcl
 import {
   to = azurerm_resource_group.rg
@@ -106,13 +106,13 @@ resource "azurerm_resource_group" "rg" {
 }
 ```
 
-`terraform plan -generate-config-out=generated.tf` може навіть згенерувати код ресурсу.
+`terraform plan -generate-config-out=generated.tf` can even generate the resource code.
 
-Після імпорту `plan` має показати `No changes`. Якщо показує зміни, код не збігається з реальністю, і їх треба вирівняти. **У моєму проєкті** після імпорту `cae-demo` план хотів прибрати `workload_profile`, бо Azure додав його сам.
+After an import, `plan` must show `No changes`. If it shows changes, the code doesn't match reality, and you have to align them. **In my project,** after importing `cae-demo`, the plan wanted to remove `workload_profile`, because Azure had added it on its own.
 
-### 6. `moved`: перейменування без пересоздання
+### 6. `moved`: renaming without recreating
 
-Якщо перейменувати ресурс у коді, Terraform вирішить, що старий треба видалити, а новий створити. Щоб цього уникнути:
+If you rename a resource in the code, Terraform decides the old one must be deleted and a new one created. To avoid that:
 
 ```hcl
 moved {
@@ -121,40 +121,40 @@ moved {
 }
 ```
 
-Те саме працює при перенесенні ресурсів у модуль (`to = module.network.azurerm_virtual_network.main`).
+The same works when moving resources into a module (`to = module.network.azurerm_virtual_network.main`).
 
-Є також блок `removed` (Terraform 1.7+): прибрати ресурс зі стейту через код, не видаляючи його в Azure.
+There's also the `removed` block (Terraform 1.7+): remove a resource from the state through code, without deleting it in Azure.
 
-### 7. Drift і refresh
+### 7. Drift and refresh
 
-Хтось змінив тег у порталі. Що буде:
-- `terraform plan` покаже, що поверне тег як у коді;
-- `terraform plan -refresh-only` покаже лише різницю між стейтом і Azure, нічого не плануючи змінювати;
-- `terraform apply -refresh-only` запише в стейт реальний стан, не змінюючи Azure.
+Someone changed a tag in the portal. What happens:
+- `terraform plan` shows that it will revert the tag to what's in the code;
+- `terraform plan -refresh-only` shows only the difference between the state and Azure, without planning any changes;
+- `terraform apply -refresh-only` writes the real state into the state file, without changing Azure.
 
-### 8. Пересоздання ресурсу
+### 8. Recreating a resource
 
 ```
 terraform apply -replace=azurerm_linux_virtual_machine.vm
 ```
 
-Замінило старе `terraform taint`. Корисно, коли ресурс «зламаний», а код не змінився. **У моєму проєкті:** зміна тексту в `custom_data` не потрапляла на VM, бо cloud-init виконується лише при першому запуску.
+This replaced the old `terraform taint`. Useful when a resource is "broken" but the code hasn't changed. **In my project:** a change to the `custom_data` text didn't reach the VM, because cloud-init only runs on first boot.
 
-### 9. Коли код, стейт і Azure розходяться
+### 9. When code, state and Azure disagree
 
-| Ситуація | Що робити |
+| Situation | What to do |
 |---|---|
-| Ресурс є в Azure, немає в стейті | `import` |
-| Ресурс є в стейті, видалений в Azure руками | `plan` сам побачить це після refresh і запропонує створити заново. Якщо ресурс більше не потрібен, `state rm` і прибрати з коду |
-| Ресурс змінили в Azure руками | `plan -refresh-only`, потім або повернути через `apply`, або оновити код |
-| Apply впав посередині | Запустити `plan` ще раз. Terraform пише в стейт усе, що встиг створити |
-| Lock завис після Ctrl+C | `force-unlock <id>`, але лише якщо впевнені, що ніхто інший не працює |
+| The resource is in Azure but not in the state | `import` |
+| The resource is in the state but was deleted in Azure by hand | `plan` sees this after refresh and proposes creating it again. If the resource is no longer needed, `state rm` and remove it from the code |
+| The resource was changed in Azure by hand | `plan -refresh-only`, then either revert it with `apply` or update the code |
+| Apply failed halfway | Run `plan` again. Terraform writes everything it managed to create to the state |
+| The lock got stuck after Ctrl+C | `force-unlock <id>`, but only if you're sure nobody else is working |
 
-**Історії з мого проєкту:**
-- Azure повернув помилку нестачі потужностей, але створив environment пізніше. Ресурс був в Azure, але не в стейті.
-- Провайдер не дочекався завершення видалення. Ресурс зник з Azure, але лишився в стейті. Допоміг повторний `destroy`: refresh побачив, що ресурсу вже немає.
+**Stories from my project:**
+- Azure returned a capacity error but created the environment later. The resource was in Azure but not in the state.
+- The provider didn't wait for a deletion to finish. The resource disappeared from Azure but stayed in the state. A second `destroy` helped: refresh saw that the resource was already gone.
 
-## Команди напам'ять
+## Commands to know by heart
 
 ```
 terraform state list
@@ -165,22 +165,22 @@ terraform import <address> <azure id>
 terraform plan -refresh-only
 terraform apply -replace=<address>
 terraform force-unlock <lock id>
-terraform state pull > backup.tfstate     # локальна копія стейту
+terraform state pull > backup.tfstate     # local copy of the state
 ```
 
-## Перевірка себе
+## Check yourself
 
-Навмисно розсинхронізуйте код, стейт і Azure трьома способами: створіть ресурс руками, видаліть ресурс руками, змініть атрибут руками. Відновіть кожен випадок і поясніть, що робили.
+Deliberately desync the code, state and Azure in three ways: create a resource by hand, delete a resource by hand, change an attribute by hand. Recover from each case and explain what you did. The full exercise is in [`practice-03-state.md`](practice-03-state.md).
 
-## Питання співбесіди
+## Interview questions
 
-- Що таке стейт і навіщо він потрібен?
-- Що станеться, якщо двоє одночасно запустять `apply`?
-- Як працює блокування стейту в Azure?
-- Ресурс створено руками. Як забрати його під керування Terraform?
-- `state rm` проти `destroy`: у чому різниця?
-- Чому стейт вважається секретом і як його захищати?
-- Як перейменувати ресурс у коді, не пересоздаючи його?
-- Apply впав посередині. Що робити?
-- Що таке drift і як його виявляти?
-- Чому в блоці `backend` не можна використовувати змінні?
+- What is state, and why is it needed?
+- What happens if two people run `apply` at the same time?
+- How does state locking work in Azure?
+- A resource was created by hand. How do you bring it under Terraform management?
+- `state rm` vs `destroy`: what's the difference?
+- Why is state considered a secret, and how do you protect it?
+- How do you rename a resource in code without recreating it?
+- Apply failed halfway. What do you do?
+- What is drift, and how do you detect it?
+- Why can't variables be used in the `backend` block?

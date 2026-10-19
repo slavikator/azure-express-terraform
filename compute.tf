@@ -1,4 +1,4 @@
-# 1. Віртуальна машина Ubuntu
+# 1. Ubuntu virtual machine
 resource "azurerm_linux_virtual_machine" "vm" {
   name                              = "vm-demo-node"
   resource_group_name               = azurerm_resource_group.rg.name
@@ -10,17 +10,17 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
   custom_data = base64encode(<<-EOF
               #!/bin/bash
-              # 1. Встановлюємо Docker
+              # 1. Install Docker
               apt-get update
               apt-get install -y docker.io docker-compose
               systemctl enable --now docker
               usermod -aG docker azureuser
 
-              # 2. Створюємо папку під Express додаток
+              # 2. Create a folder for the Express app
               mkdir -p /home/azureuser/app
               cd /home/azureuser/app
 
-              # 3. Пишемо код Express сервера
+              # 3. Write the Express server code
               cat << 'APP_EOF' > server.js
               const express = require('express');
               const app = express();
@@ -37,7 +37,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
               app.listen(PORT, () => console.log(`Server running on port $${PORT}`));
               APP_EOF
 
-              # 4. Пишемо package.json
+              # 4. Write package.json
               cat << 'PKG_EOF' > package.json
               {
                 "name": "express-demo",
@@ -47,7 +47,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
               }
               PKG_EOF
 
-              # 5. Пишемо Dockerfile
+              # 5. Write the Dockerfile
               cat << 'DOCKER_EOF' > Dockerfile
               FROM node:18-alpine
               WORKDIR /app
@@ -58,7 +58,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
               CMD ["node", "server.js"]
               DOCKER_EOF
 
-              # 6. Збираємо та запускаємо Docker-контейнер на 80 порту
+              # 6. Build and run the Docker container on port 80
               docker build -t express-app:v1 .
               docker run -d -p 80:3000 --name my-express-app --restart always express-app:v1
               EOF
