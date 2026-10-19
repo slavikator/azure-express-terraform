@@ -1,40 +1,40 @@
-# Практика тижня 3. «Коли код, стейт і Azure розходяться»
+# Week 3 practice: "When code, state and Azure disagree"
 
-**Мета:** навмисно зламати синхронізацію між кодом, стейтом і Azure чотирма способами і щоразу самостійно знайти й виправити проблему. Це фінальна перевірка тижня 3: тут сходяться всі попередні теми.
+**Goal:** deliberately break the sync between code, state and Azure in four different ways, and each time find and fix the problem yourself. This is the final check for week 3: all previous topics come together here.
 
-**Теми:** import, drift, refresh, `removed`, lock, перерваний `apply`.
+**Topics:** import, drift, refresh, `removed`, lock, interrupted `apply`.
 
-**Час:** 1–1,5 години. **Вартість:** близько $0,05 на годину, поки працює VM. Наприкінці буде `destroy`.
+**Time:** 1–1.5 hours. **Cost:** about $0.05 per hour while the VM is running. There's a `destroy` at the end.
 
-**Конспект:** [`03-terraform-state.md`](03-terraform-state.md), розділ 9.
+**Notes:** [`03-terraform-state.md`](03-terraform-state.md), section 9.
 
 ---
 
-## Правила практики
+## Rules for this practice
 
-1. **Спершу вгадайте, потім перевіряйте.** Перед кожним `plan` запишіть, що він покаже: `+`, `~`, `-/+`, `-` і скільки ресурсів.
-2. **Діагностика завжди в одному порядку:**
+1. **Guess first, then check.** Before every `plan`, write down what it will show: `+`, `~`, `-/+`, `-`, and how many resources.
+2. **Always diagnose in the same order:**
    ```
-   terraform plan -refresh-only     # що змінилося в Azure порівняно зі стейтом
-   terraform plan                   # що Terraform хоче з цим зробити
-   terraform state list             # що є в стейті
-   az ...                           # що реально є в Azure
+   terraform plan -refresh-only     # what changed in Azure compared to the state
+   terraform plan                   # what Terraform wants to do about it
+   terraform state list             # what's in the state
+   az ...                           # what actually exists in Azure
    ```
-3. **Не пуште код у git посеред сценарію.** На push CI запускає лише `fmt` і `plan`, але код і стейт тимчасово не збігаються, і план у CI буде дивний.
-4. Підказки сховані під «Підказка». Спершу спробуйте без них.
+3. **Don't push code to git in the middle of a scenario.** On push, CI only runs `fmt` and `plan`, but code and state are temporarily out of sync, so the CI plan will look strange.
+4. Hints are hidden under "Hint". Try without them first.
 
-Таблиця, яку ви маєте заповнити наприкінці:
+The table you need to fill in at the end:
 
-| Код | Стейт | Azure | Що покаже `plan` |
+| Code | State | Azure | What `plan` shows |
 |---|---|---|---|
 | ✅ | ❌ | ✅ | ? |
 | ✅ | ✅ | ❌ | ? |
-| ✅ | ✅ | ✅, але інше значення | ? |
+| ✅ | ✅ | ✅, but a different value | ? |
 | ❌ | ✅ | ✅ | ? |
 
 ---
 
-## Крок 0. Підготовка
+## Step 0. Preparation
 
 ```
 cd ~/azure/demo
@@ -42,126 +42,126 @@ terraform apply
 terraform plan
 ```
 
-Останній `plan` має показати `No changes`. Лише з цієї точки починайте сценарії.
+The last `plan` must show `No changes`. Start the scenarios only from this point.
 
-> ❓ **1.** Чому важливо починати з `No changes`? Що піде не так, якщо до сценарію вже є якісь зміни в плані?
+> ❓ **1.** Why is it important to start from `No changes`? What goes wrong if the plan already has some changes before a scenario?
 
 ---
 
-## Сценарій 1. Ресурс створили руками
+## Scenario 1. A resource was created by hand
 
-**Ситуація:** колега створив NSG у порталі «на хвилинку» і забув. Тепер його треба взяти під керування Terraform.
+**Situation:** a colleague created an NSG in the portal "just for a minute" and forgot about it. Now it needs to be brought under Terraform management.
 
-**Зламайте:**
+**Break it:**
 
 ```
 az network nsg create -g rg-devops-demo-swe -n nsg-manual -l swedencentral
 ```
 
-**Передбачте**, потім перевірте:
+**Predict**, then check:
 
 ```
 terraform plan
 ```
 
-> ❓ **2.** Що показав `plan` і чому саме так? У якому рядку таблиці вище ця ситуація?
+> ❓ **2.** What did `plan` show, and why exactly that? Which row of the table above is this situation?
 
-**Полагодьте:** візьміть `nsg-manual` під керування Terraform так, щоб наприкінці `plan` показав `No changes`. Ресурс у коді назвіть `azurerm_network_security_group.manual`.
+**Fix it:** bring `nsg-manual` under Terraform management so that `plan` ends with `No changes`. In the code, name the resource `azurerm_network_security_group.manual`.
 
 <details>
-<summary>Підказка</summary>
+<summary>Hint</summary>
 
-- ID ресурсу: `az network nsg show -g rg-devops-demo-swe -n nsg-manual --query id -o tsv`
-- Блок `import {}` в окремому файлі і `terraform plan -generate-config-out=generated.tf` (тема 5).
-- Перевірте, що в згенерованому коді немає зайвого, і що `plan` показує `1 to import, 0 to change`.
+- Resource ID: `az network nsg show -g rg-devops-demo-swe -n nsg-manual --query id -o tsv`
+- An `import {}` block in a separate file, plus `terraform plan -generate-config-out=generated.tf` (topic 5).
+- Check that the generated code has nothing extra, and that `plan` shows `1 to import, 0 to change`.
 
 </details>
 
-> ❓ **3.** Що показав `plan` перед `apply`: скільки `to import`, `to change`? Якщо були зміни, звідки вони взялися?
+> ❓ **3.** What did `plan` show before `apply`: how many `to import`, `to change`? If there were changes, where did they come from?
 
-**Приберіть за собою:** `nsg-manual` більше не потрібен ні в коді, ні в Azure. Зробіть це одним `apply`.
+**Clean up:** `nsg-manual` is no longer needed, either in code or in Azure. Do it with a single `apply`.
 
-> ❓ **4.** Що ви зробили, щоб видалити `nsg-manual` і з Azure, і зі стейту? Що було б, якби ви замість цього зробили `terraform state rm`?
+> ❓ **4.** What did you do to delete `nsg-manual` from both Azure and the state? What would have happened if you had used `terraform state rm` instead?
 
 ---
 
-## Сценарій 2. Ресурс видалили руками
+## Scenario 2. A resource was deleted by hand
 
-**Ситуація:** хтось у порталі відв'язав NSG від підмережі, бо «заважав». У стейті прив'язка досі є.
+**Situation:** someone in the portal detached the NSG from the subnet because it "was in the way". The association is still in the state.
 
-**Зламайте:**
+**Break it:**
 
 ```
 az network vnet subnet update -g rg-devops-demo-swe --vnet-name vnet-demo -n snet-internal --remove networkSecurityGroup
 ```
 
-**Передбачте**, потім перевірте:
+**Predict**, then check:
 
 ```
 terraform plan -refresh-only
 terraform plan
 ```
 
-> ❓ **5.** Що показав `-refresh-only` про `azurerm_subnet_network_security_group_association.subnet_assoc`? А звичайний `plan`?
+> ❓ **5.** What did `-refresh-only` show about `azurerm_subnet_network_security_group_association.subnet_assoc`? And the normal `plan`?
 
-**Полагодьте:** поверніть прив'язку і доведіть `plan` до `No changes`.
+**Fix it:** restore the association and bring `plan` back to `No changes`.
 
-> ❓ **6.** Уявіть, що прив'язка справді більше не потрібна. Як правильно її прибрати, щоб Terraform не намагався створити її знову?
+> ❓ **6.** Imagine the association really isn't needed anymore. What's the right way to remove it so Terraform doesn't try to create it again?
 
 ---
 
-## Сценарій 3. Атрибут змінили руками
+## Scenario 3. An attribute was changed by hand
 
-**Ситуація:** адмін обмежив SSH до однієї IP-адреси прямо в порталі, бо «так безпечніше».
+**Situation:** an admin restricted SSH to a single IP address directly in the portal, because "it's more secure".
 
-**Зламайте:**
+**Break it:**
 
 ```
 az network nsg rule update -g rg-devops-demo-swe --nsg-name nsg-demo -n SSH --source-address-prefixes 203.0.113.10
 ```
 
-**Передбачте**, потім перевірте:
+**Predict**, then check:
 
 ```
 terraform plan -refresh-only
 terraform plan
 ```
 
-> ❓ **7.** Що хоче зробити `plan` з правилом SSH? Чому це `~`, а не `-/+`?
+> ❓ **7.** What does `plan` want to do with the SSH rule? Why is it `~` and not `-/+`?
 
-**Вирішіть самі,** хто правий, і полагодьте відповідно:
+**Decide for yourself** who's right, and fix it accordingly:
 
-- **праве налаштування в коді** → поверніть як було;
-- **праве ручне налаштування** → перенесіть зміну в код.
+- **the code is right** → revert it to how it was;
+- **the manual change is right** → move the change into the code.
 
-У будь-якому разі наприкінці `plan` має показати `No changes`, а SSH-правило має бути таким, щоб ви могли зайти на VM.
+Either way, `plan` must end with `No changes`, and the SSH rule must still let you log in to the VM.
 
-> ❓ **8.** Що ви обрали і як саме полагодили? Чому `apply -refresh-only` тут не рішення?
+> ❓ **8.** What did you choose, and how exactly did you fix it? Why isn't `apply -refresh-only` the solution here?
 
 ---
 
-## Сценарій 4. `apply` перервали посередині
+## Scenario 4. `apply` was interrupted halfway
 
-**Ситуація:** під час `apply` у вас вимкнувся ноутбук. Імітуємо це подвійним Ctrl+C.
+**Situation:** your laptop died during `apply`. We simulate this with a double Ctrl+C.
 
-**Зламайте:**
+**Break it:**
 
 ```
 terraform apply -replace=azurerm_linux_virtual_machine.vm
 ```
 
-Введіть `yes`. Дочекайтеся рядка `azurerm_linux_virtual_machine.vm: Creating...` і **двічі швидко натисніть Ctrl+C**.
+Type `yes`. Wait for the line `azurerm_linux_virtual_machine.vm: Creating...` and **quickly press Ctrl+C twice**.
 
-Запишіть, що вивів Terraform після двох Ctrl+C.
+Write down what Terraform printed after the two Ctrl+C presses.
 
-**Діагностуйте.** Відповідайте на кожне питання командою, а не здогадкою:
+**Diagnose.** Answer each question with a command, not a guess:
 
-- Чи висить lock на стейті?
-- Чи є VM у стейті?
-- Чи є VM в Azure? У якому вона стані?
+- Is the state locked?
+- Is the VM in the state?
+- Does the VM exist in Azure? What state is it in?
 
 <details>
-<summary>Підказка: команди</summary>
+<summary>Hint: commands</summary>
 
 ```
 terraform plan
@@ -169,38 +169,38 @@ terraform state list | grep vm
 az vm show -g rg-devops-demo-swe -n vm-demo-node --query provisioningState -o tsv
 ```
 
-Lock також видно в порталі: контейнер `tfstate`, колонка **Lease state**.
+The lock is also visible in the portal: container `tfstate`, column **Lease state**.
 
 </details>
 
-> ❓ **9.** Що показала діагностика: lock, стейт, Azure? У якому рядку таблиці ви опинилися?
+> ❓ **9.** What did the diagnosis show: lock, state, Azure? Which row of the table are you in?
 
-**Полагодьте:** доведіть `plan` до `No changes`, і щоб VM працювала. Результат залежить від того, в який момент ви натиснули Ctrl+C, тому готового рецепта немає.
+**Fix it:** bring `plan` back to `No changes`, with the VM running. The outcome depends on exactly when you pressed Ctrl+C, so there's no ready-made recipe.
 
 <details>
-<summary>Підказка: можливі варіанти</summary>
+<summary>Hint: possible outcomes</summary>
 
-- Lock висить → `terraform force-unlock <ID>`, але лише коли впевнені, що жоден інший `apply` не працює.
-- VM є в Azure, але немає в стейті → `plan` захоче її створити, а `apply` впаде з `already exists`. Що з цим робити, ви вже знаєте зі сценарію 1.
-- VM є в Azure в стані `Failed` → її простіше видалити (`az vm delete`) і дати Terraform створити заново.
-- VM у стейті і в Azure → можливо, все гаразд, і `plan` покаже `No changes`.
+- The state is locked → `terraform force-unlock <ID>`, but only once you're sure no other `apply` is running.
+- The VM exists in Azure but not in the state → `plan` will want to create it, and `apply` will fail with `already exists`. You already know what to do from scenario 1.
+- The VM exists in Azure in a `Failed` state → it's easier to delete it (`az vm delete`) and let Terraform create it again.
+- The VM is in both the state and Azure → everything may be fine, and `plan` will show `No changes`.
 
 </details>
 
-> ❓ **10.** Що ви зробили, щоб полагодити, і в якому порядку? Чому після одного Ctrl+C такого б не сталося?
+> ❓ **10.** What did you do to fix it, and in what order? Why wouldn't this have happened with a single Ctrl+C?
 
 ---
 
-## Крок 5. Прибирання
+## Step 5. Cleanup
 
 ```
-terraform plan          # має бути No changes
+terraform plan          # should be No changes
 terraform destroy
 az group exists -n rg-devops-demo-swe
-git status              # має бути чисто: жодних import.tf, generated.tf
+git status              # should be clean: no import.tf, no generated.tf
 ```
 
-Також переконайтеся, що `nsg-manual` не лишився в Azure:
+Also make sure `nsg-manual` isn't left behind in Azure:
 
 ```
 az network nsg list -o table
@@ -208,25 +208,25 @@ az network nsg list -o table
 
 ---
 
-## Результат
+## Outcome
 
-Після практики ви маєте вміти без підглядання:
+After this practice you should be able to, without looking:
 
-- заповнити таблицю «код / стейт / Azure / що покаже plan»;
-- відрізнити справжній drift від шуму computed-атрибутів;
-- взяти під керування ресурс, створений руками;
-- прибрати ресурс з керування Terraform без видалення в Azure;
-- відновитися після перерваного `apply` і зависшого lock.
+- fill in the "code / state / Azure / what plan shows" table;
+- tell real drift apart from computed-attribute noise;
+- bring a resource created by hand under Terraform management;
+- remove a resource from Terraform management without deleting it in Azure;
+- recover from an interrupted `apply` and a stuck lock.
 
-## Мої відповіді
+## My answers
 
-Таблиця:
+Table:
 
-| Код | Стейт | Azure | Що покаже `plan` |
+| Code | State | Azure | What `plan` shows |
 |---|---|---|---|
 | ✅ | ❌ | ✅ | |
 | ✅ | ✅ | ❌ | |
-| ✅ | ✅ | ✅, але інше значення | |
+| ✅ | ✅ | ✅, but a different value | |
 | ❌ | ✅ | ✅ | |
 
 1.
