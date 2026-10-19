@@ -25,13 +25,13 @@
 
 The table you need to fill in at the end:
 
-| Code | State | Azure | What `plan` shows |
-|---|---|---|---|
-| ✅ | ❌ | ✅ | ? |
-| ✅ | ✅ | ❌ | ? |
-| ✅ | ✅ | ✅, but a different value | ? |
-| ❌ | ✅ | ✅ | ? |
-| ❌ | ❌ | ✅ | ? |
+| # | Code | State | Azure | Where you meet it | What `plan` shows |
+|---|---|---|---|---|---|
+| 1 | ❌ | ❌ | ✅ | Scenario 1, after creating `nsg-manual` | ? |
+| 2 | ✅ | ❌ | ✅ | Scenario 1, after writing the code; maybe Scenario 4 | ? |
+| 3 | ✅ | ✅ | ❌ | Scenario 2 | ? |
+| 4 | ✅ | ✅ | ✅, but a different value | Scenario 3 | ? |
+| 5 | ❌ | ✅ | ✅ | Scenario 1, cleanup | ? |
 
 ---
 
@@ -65,7 +65,7 @@ az network nsg create -g rg-devops-demo-swe -n nsg-manual -l swedencentral
 terraform plan
 ```
 
-> ❓ **2.** What did `plan` show, and why exactly that? Which row of the table above is this situation?
+> ❓ **2.** What did `plan` show, and why exactly that? Which row number of the table above is this situation?
 
 **Fix it:** bring `nsg-manual` under Terraform management so that `plan` ends with `No changes`. In the code, name the resource `azurerm_network_security_group.manual`.
 
@@ -174,7 +174,7 @@ The lock is also visible in the portal: container `tfstate`, column **Lease stat
 
 </details>
 
-> ❓ **9.** What did the diagnosis show: lock, state, Azure? Which row of the table are you in?
+> ❓ **9.** What did the diagnosis show: lock, state, Azure? Which row number of the table are you in?
 
 **Fix it:** bring `plan` back to `No changes`, with the VM running. The outcome depends on exactly when you pressed Ctrl+C, so there's no ready-made recipe.
 
@@ -223,13 +223,13 @@ After this practice you should be able to, without looking:
 
 Table:
 
-| Code | State | Azure | What `plan` shows |
-|---|---|---|---|
-| ✅ | ❌ | ✅ | |
-| ✅ | ✅ | ❌ | |
-| ✅ | ✅ | ✅, but a different value | |
-| ❌ | ✅ | ✅ | |
-| ❌ | ❌ | ✅ | |
+| # | Code | State | Azure | Where you meet it | What `plan` shows |
+|---|---|---|---|---|---|
+| 1 | ❌ | ❌ | ✅ | Scenario 1, after creating `nsg-manual` |   |
+| 2 | ✅ | ❌ | ✅ | Scenario 1, after writing the code; maybe Scenario 4 |   |
+| 3 | ✅ | ✅ | ❌ | Scenario 2 |   |
+| 4 | ✅ | ✅ | ✅, but a different value | Scenario 3 |   |
+| 5 | ❌ | ✅ | ✅ | Scenario 1, cleanup |   |
 
 1.
 2.
