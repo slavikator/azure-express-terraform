@@ -151,7 +151,7 @@ az network watcher test-ip-flow ...       # will the NSG let a specific packet t
 
 ## Check yourself
 
-Draw a hub-spoke network with NSGs and explain what an HTTP request from the internet passes through on its way to a VM: public IP → subnet NSG → NIC NSG → VM. Work out how many VMs fit in a `/27`.
+Draw a hub-spoke network with NSGs and explain what an HTTP request from the internet passes through on its way to a VM: public IP → subnet NSG → NIC NSG → VM. Work out how many VMs fit in a `/27`. The hands-on exercise is in [`practice-04-networking.md`](practice-04-networking.md).
 
 ## Interview questions
 
