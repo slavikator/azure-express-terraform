@@ -68,9 +68,14 @@ terraform init -backend-config="key=prod.tfstate"
 ### 3. How to protect state
 
 - A separate RG for the state (`rg-tfstate`), so the project's `destroy` doesn't delete it.
-- No public access to the storage account; access through RBAC.
-- **Blob versioning** or soft delete, to restore a corrupted state.
+- **Blob versioning** and soft delete, to restore a corrupted or deleted state.
+- A `CanNotDelete` resource lock on `rg-tfstate`, so the whole storage account can't be deleted. Not `ReadOnly`: it blocks `listKeys`, and Terraform can no longer reach the state.
+- `sensitive = true` hides a value only in CLI output. In the state it's still plain text.
 - As few people with access as possible: whoever reads the state sees the secrets.
+
+**Done in my project:** TLS 1.2, versioning, soft delete for 7 days, lock `protect-tfstate`.
+
+**Moved to week 8** ([`08-security-identity.md`](08-security-identity.md), section 7): RBAC data roles instead of access keys, disabling shared key access, and closing public network access. Each of these can break CI if done in the wrong order, so they go together with the CI identity rework.
 
 ### 4. State commands
 

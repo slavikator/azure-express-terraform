@@ -121,7 +121,38 @@ Examples: allowed locations, a required `owner` tag, banning public IPs, require
 
 A policy with the `Deny` effect also stops `terraform apply`. The error is `RequestDisallowedByPolicy`.
 
-### 7. Principles
+### 7. Protecting the state storage
+
+Week 3 covered backups and the lock. What's left is **who** can read the state, and **from where**.
+
+**Who: RBAC instead of access keys.** By default the `azurerm` backend reads the storage account key through `listKeys`. Anyone with Contributor or Owner on the account can do the same and read everything, bypassing RBAC. Entra ID auth replaces the key with data-plane roles:
+
+| Role | Who gets it |
+|---|---|
+| Storage Blob Data Contributor | the CI identity (it writes the state) |
+| Storage Blob Data Reader | people who only need to read, or nobody: changes go through CI |
+
+```hcl
+backend "azurerm" {
+  ...
+  use_azuread_auth = true
+}
+```
+
+The safe order, checking `terraform init` locally and in CI after each step:
+1. Assign Storage Blob Data Contributor to yourself and the CI identity on `sttfstate1791293035`.
+2. Set `use_azuread_auth = true` and run `terraform init -reconfigure`.
+3. Only then disable shared key access: `az storage account update -n sttfstate1791293035 -g rg-tfstate --allow-shared-key-access false`.
+
+If step 3 comes first, `init` fails everywhere that still uses the key.
+
+**From where: no public network access.** My storage account accepts connections from the whole internet (`defaultAction: Allow`), protected only by authentication. Closing it with a firewall breaks GitHub-hosted runners, whose IPs change. The options:
+- a **self-hosted runner** in a VNet, plus a service endpoint or private endpoint to the storage account;
+- a **private endpoint** and `publicNetworkAccess = Disabled`, with all access from inside the VNet.
+
+**Current state of my account:** TLS 1.2, versioning, soft delete, `CanNotDelete` lock: done. Entra ID auth, shared key disabled, network closed: to do this week.
+
+### 8. Principles
 
 - **Least privilege:** minimal permissions at the smallest scope.
 - **No secrets in code:** no passwords in `.tf`, in `.tfvars` in git, or in workflow variables.
@@ -152,5 +183,6 @@ Move your workflow to OIDC and delete `AZURE_CLIENT_SECRET` from GitHub. Create 
 - How do you keep a secret out of the Terraform state?
 - Which permissions does the Terraform SP really need, and how do you limit them?
 - Key Vault: RBAC or access policies?
+- Who can read your Terraform state, and how do you limit it?
 - Why soft delete and purge protection?
 - What is Azure Policy, and how does it differ from RBAC?
