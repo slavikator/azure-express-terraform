@@ -90,8 +90,10 @@ Apply it and check that SSH still works for you:
 
 ```
 terraform apply
-ssh azureuser@$(terraform output -raw vm_public_ip) hostname
+ssh -i ~/.ssh/id_rsa_azure azureuser@$(terraform output -raw vm_public_ip) hostname
 ```
+
+`-i` points to the private key that matches `ssh_public_key` in `terraform.tfvars`. Without it, `ssh` tries your default keys and fails with `Permission denied (publickey)`. To check which local key matches: compare `ssh-keygen -lf ~/.ssh/<key>.pub` with the key in `terraform.tfvars`.
 
 **Before you push,** CI needs the value too. The variable has no default, so without it `plan` in CI fails.
 
@@ -149,12 +151,13 @@ This step is an experiment: create everything in a new file `peering.tf`, and de
 az network vnet peering list -g rg-devops-demo-swe --vnet-name vnet-demo --query "[].{name:name, state:peeringState}" -o table
 ```
 
-SSH to the main VM and try to reach the second one by its private IP:
+From your Mac, run `ping` on the main VM through SSH, aimed at the second VM's private IP:
 
 ```
-ssh azureuser@$(terraform output -raw vm_public_ip)
-ping -c 3 10.1.1.4
+ssh -i ~/.ssh/id_rsa_azure azureuser@$(terraform output -raw vm_public_ip) ping -c 3 10.1.1.4
 ```
+
+The command after the address runs **on the VM**, not on your Mac, and `ssh` returns when it finishes. `10.1.1.4` is a private IP, so your Mac can't reach it directly; only something inside Azure can.
 
 > ❓ **7.** What's the peering state, and did `ping` work? Why?
 
