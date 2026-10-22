@@ -178,9 +178,117 @@ resource "azurerm_linux_virtual_machine" "vm" {
 - `precondition`: a check before the resource is created.
 - `postcondition`: a check afterwards, with access to `self`.
 
+## Going deeper
+
+### 8. The `count` problem, step by step
+
+Why removing one list item touches others: with `count`, the **address** of each copy is its **position**.
+
+```hcl
+variable "names" { default = ["a", "b", "c"] }
+
+resource "azurerm_public_ip" "pip" {
+  count = length(var.names)
+  name  = "pip-${var.names[count.index]}"
+  ...
+}
+```
+
+| Address | Before: `["a","b","c"]` | After removing `"a"`: `["b","c"]` | Plan |
+|---|---|---|---|
+| `pip[0]` | `pip-a` | `pip-b` | `-/+`: the name changes, so it's recreated |
+| `pip[1]` | `pip-b` | `pip-c` | `-/+` |
+| `pip[2]` | `pip-c` | gone | `-` |
+
+You wanted to delete one IP; Terraform deletes three and creates two. Every `-/+` on a public IP also means a **new IP address**. With `for_each`, the address is the **key** (`pip["a"]`), so removing `"a"` touches only `pip["a"]`.
+
+### 9. Referring to copies
+
+| | `count` | `for_each` |
+|---|---|---|
+| One copy | `azurerm_public_ip.pip[0].id` | `azurerm_public_ip.pip["a"].id` |
+| All copies, as a list | `azurerm_public_ip.pip[*].id` | `values(azurerm_public_ip.pip)[*].id` |
+| All copies, as a map | `{ for i, p in azurerm_public_ip.pip : i => p.id }` | `{ for k, p in azurerm_public_ip.pip : k => p.id }` |
+| Inside the block | `count.index` | `each.key`, `each.value` |
+
+- A resource with `for_each` is a **map** of objects, so `[*]` doesn't work on it directly. Use `values(...)` or a `for` expression.
+- With `for_each` over a **set**, `each.key` and `each.value` are the same string.
+- `count` and `for_each` can't be used on the same resource.
+- One copy referring to a matching copy of another resource: `network_interface_ids = [azurerm_network_interface.nic[each.key].id]`.
+
+### 10. `for` expressions in detail
+
+```hcl
+[for s in var.list : upper(s)]                    # list → list
+[for k, v in var.map : "${k}=${v}"]               # map → list
+{ for s in var.list : s => length(s) }            # list → map
+{ for k, v in var.map : k => v if v != "" }       # filter with if
+{ for vm in var.vms : vm.env => vm.name... }      # group: "..." collects duplicates into lists
+```
+
+- Square brackets produce a **list**, curly braces a **map**.
+- In a map, every key must be unique, unless you use `...` to group.
+
+### 11. Omitting an argument with `null`
+
+`null` means "as if this argument wasn't written":
+
+```hcl
+public_ip_address_id = var.public ? azurerm_public_ip.pip[0].id : null
+```
+
+This is how you make arguments conditional without duplicating the whole block.
+
+### 12. `dynamic` details
+
+- Inside `content`, the iterator is named after the block (`security_rule.key`, `security_rule.value`). Rename it with `iterator = rule`.
+- `dynamic` blocks can be nested.
+- **Don't overuse it.** A `dynamic` block with two static items is harder to read than two plain blocks. Use it when the list really comes from a variable.
+- Refactoring rules into `dynamic` should produce **`No changes`**. If the plan shows changes, the generated blocks differ from the old ones (a different name, priority or port).
+
+### 13. `lifecycle` gotchas
+
+- **`prevent_destroy` only works while the block is in the code.** If someone deletes the whole resource block, the protection is deleted with it, and Terraform plans the destroy. It also doesn't stop deletion from the Portal. For real protection, add an Azure **resource lock** (`CanNotDelete`), as on `rg-tfstate`.
+- **`create_before_destroy` needs unique names:** the new copy exists next to the old one, so a fixed `name` collides. Terraform also applies it automatically to the resources the replaced one depends on.
+- **`ignore_changes = all`:** Terraform creates the resource and never updates it afterwards.
+- **`replace_triggered_by`** can only reference managed resources or their attributes, not variables. To trigger on a variable, put it in a `terraform_data` resource (`input = var.x`) and reference that.
+
+### 14. Validation, conditions and `check`
+
+| | Where | When | On failure |
+|---|---|---|---|
+| `validation` | `variable` block | start of `plan` | error, stops |
+| `precondition` | `lifecycle` of a resource or output | before the resource is planned | error, stops |
+| `postcondition` | `lifecycle` of a resource | after it's created or read; can use `self` | error, stops |
+| `check` block (1.5+) | top level | end of `plan` and `apply` | **warning only**, doesn't stop |
+
+`check` is useful for health checks, e.g. "the website returns 200", that should be reported but shouldn't block deployment.
+
+### 15. Common errors
+
+| Error | Cause | Fix |
+|---|---|---|
+| `The "for_each" value depends on resource attributes that cannot be determined until apply` | `for_each` keys come from a computed value (an ID, an IP) | build keys from variables or constants; computed values can go in `each.value` |
+| `Invalid for_each argument ... a set of strings` | a list was passed to `for_each` | `toset(var.list)` |
+| `Missing resource instance key` | referring to a resource with `count`/`for_each` without `[...]` | add the index or key |
+| `Duplicate object key` in a `for` | two items produce the same map key | make keys unique, or group with `...` |
+
+### 16. Migrating `count` → `for_each` without recreation
+
+Changing the meta-argument changes every address: `pip[0]` → `pip["a"]`. Use `moved` blocks so nothing is recreated:
+
+```hcl
+moved {
+  from = azurerm_public_ip.pip[0]
+  to   = azurerm_public_ip.pip["a"]
+}
+```
+
+One block per copy. The plan should show `has moved to` and no `-/+`.
+
 ## Check yourself
 
-Rewrite your project's NSG with `dynamic` from a map in a variable. Create two VMs with `for_each`. Remove one from the map and make sure `plan` touches only that one.
+Rewrite your project's NSG with `dynamic` from a map in a variable. Create two VMs with `for_each`. Remove one from the map and make sure `plan` touches only that one. The hands-on exercise is in [`practice-05-expressions.md`](practice-05-expressions.md).
 
 ## Interview questions
 
@@ -192,3 +300,8 @@ Rewrite your project's NSG with `dynamic` from a map in a variable. Create two V
 - How do you protect a critical resource from accidental deletion?
 - What does `replace_triggered_by` do?
 - Why must `for_each` keys be known during `plan`?
+- How do you migrate a resource from `count` to `for_each` without recreating it?
+- How do you refer to all copies of a resource created with `for_each`?
+- How do you make an argument optional in a resource without duplicating the block?
+- Does `prevent_destroy` fully protect a resource? What else would you use?
+- `validation`, `precondition`, `postcondition`, `check`: what's the difference?
