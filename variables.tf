@@ -17,3 +17,12 @@ variable "vm_size" {
   type    = string
   default = "Standard_B2ls_v2"
 }
+
+variable "nsg_rules" {
+  description = "Inbound NSG rules: name => priority and port"
+  type        = map(object({ priority = number, port = string }))
+  default = {
+    SSH   = { priority = 1001, port = "22" }
+    HTTP  = { priority = 1002, port = "80" }
+  }
+}
