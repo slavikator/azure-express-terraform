@@ -54,31 +54,29 @@ Leave with `exit`.
 
 ## Step 2. The `count` trap, and the fix
 
-This step is an experiment in a new file, `count-demo.tf`. Public IPs are cheap and quick to create, so they're good for seeing what happens.
+This step is an experiment in a new file, `count-demo.tf`. It uses NSGs: they're free, created in seconds, and have no tight quota. (Public IPs would also work, but a trial subscription allows only 3 per region, and your VM already uses one.)
 
-**Part A: create three IPs with `count`.**
+**Part A: create three NSGs with `count`.**
 
 ```hcl
 locals {
-  pip_names = ["a", "b", "c"]
+  nsg_names = ["a", "b", "c"]
 }
 
-resource "azurerm_public_ip" "demo" {
-  count               = length(local.pip_names)
-  name                = "pip-demo-${local.pip_names[count.index]}"
+resource "azurerm_network_security_group" "demo" {
+  count               = length(local.nsg_names)
+  name                = "nsg-demo-${local.nsg_names[count.index]}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
 }
 ```
 
-Apply it, then list the addresses and the IPs Azure assigned:
+Apply it, then list the addresses and each NSG's `resourceGuid`. Azure assigns a new GUID whenever a resource is created, so it proves whether something was recreated:
 
 ```
 terraform apply
 terraform state list | grep demo
-az network public-ip list -g rg-devops-demo-swe --query "[?starts_with(name,'pip-demo')].{name:name, ip:ipAddress}" -o table
+az network nsg list -g rg-devops-demo-swe --query "[?starts_with(name,'nsg-demo-')].{name:name, guid:resourceGuid}" -o table
 ```
 
 **Part B: remove `"a"`.** Change the list to `["b", "c"]`. **Predict** the plan: which addresses get which symbol, and what will the `Plan:` line say? Then:
@@ -89,13 +87,13 @@ terraform plan
 
 **Don't apply.**
 
-> ❓ **3.** What did the plan show for `demo[0]`, `demo[1]` and `demo[2]`? You wanted to delete one IP. What would actually happen to the addresses of `pip-demo-b` and `pip-demo-c`?
+> ❓ **3.** What did the plan show for `demo[0]`, `demo[1]` and `demo[2]`? You wanted to delete one NSG. What would actually happen to `nsg-demo-b` and `nsg-demo-c`?
 
 **Part C: switch to `for_each` without recreating anything.**
 
 1. Put `"a"` back: `["a", "b", "c"]`.
-2. Replace `count = ...` with `for_each = toset(local.pip_names)`, and build the name from `each.key`.
-3. Add three `moved` blocks, from `azurerm_public_ip.demo[0]` to `azurerm_public_ip.demo["a"]`, and so on.
+2. Replace `count = ...` with `for_each = toset(local.nsg_names)`, and build the name from `each.key`.
+3. Add three `moved` blocks, from `azurerm_network_security_group.demo[0]` to `azurerm_network_security_group.demo["a"]`, and so on.
 
 **Predict**, then check:
 
@@ -107,9 +105,9 @@ The plan must show three `has moved to` lines and `0 to add, 0 to change, 0 to d
 
 > ❓ **4.** Why did nothing get recreated, even though every address changed? What would the plan have shown without the `moved` blocks?
 
-**Part D: remove `"a"` again.** Change the list to `["b", "c"]`, predict, then `plan` and `apply`. Compare the IPs of `pip-demo-b` and `pip-demo-c` with Part A.
+**Part D: remove `"a"` again.** Change the list to `["b", "c"]`, predict, then `plan` and `apply`. Compare the GUIDs of `nsg-demo-b` and `nsg-demo-c` with Part A.
 
-> ❓ **5.** What did the plan show this time? Did the remaining IPs keep their addresses?
+> ❓ **5.** What did the plan show this time? Did the remaining NSGs keep their GUIDs?
 
 **Cleanup:** delete `count-demo.tf` (the `moved` blocks go with it), then `plan` (predict!) and `apply`.
 
