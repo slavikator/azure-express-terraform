@@ -149,7 +149,7 @@ Remove `HTTPS` again (the app doesn't serve HTTPS), check that `plan` shows `No 
 
 This step is an experiment in a new file, `vms.tf`. The VMs go into `snet-mgmt`, the subnet you created in week 4.
 
-**Quota:** a trial subscription allows only **4 vCPUs per region**. Each `Standard_B2ls_v2` has 2, so the main VM plus two lab VMs (6 vCPUs) don't fit. Before this step, check `az vm list-usage -l swedencentral --query "[?name.value=='cores'].{current:currentValue, limit:limit}" -o table`. If needed, temporarily deallocate the main VM (`az vm deallocate -g rg-devops-demo-swe -n vm-demo-node`) and start it again after the step (`az vm start ...`). Deallocated VMs don't count toward the core quota.
+**Quota:** a trial subscription allows only **4 vCPUs per region**. Each `Standard_B2ls_v2` has 2, so the main VM plus two lab VMs (6 vCPUs) don't fit. Before this step, check `az vm list-usage -l swedencentral --query "[?name.value=='cores'].{current:currentValue, limit:limit}" -o table`. Deallocating a VM doesn't help: the quota counts the cores of deallocated VMs too. Two options: run this step while the main VM doesn't exist (Terraform will recreate it when cores free up), or use one lab VM of 2 vCPUs plus a second, smaller one if a 1-vCPU size is available in your region (`az vm list-skus -l swedencentral --size Standard_B1 -o table`).
 
 **Write `vms.tf`:**
 
