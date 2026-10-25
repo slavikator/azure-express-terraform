@@ -22,7 +22,7 @@ variable "nsg_rules" {
   description = "Inbound NSG rules: name => priority and port"
   type        = map(object({ priority = number, port = string }))
   default = {
-    SSH   = { priority = 1001, port = "22" }
-    HTTP  = { priority = 1002, port = "80" }
+    SSH  = { priority = 1001, port = "22" }
+    HTTP = { priority = 1002, port = "80" }
   }
 }
