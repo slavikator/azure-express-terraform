@@ -89,5 +89,9 @@ resource "azurerm_linux_virtual_machine" "vm" {
       vm_agent_platform_updates_enabled,
       custom_data,
     ]
+    precondition {
+      condition     = startswith(var.vm_size, "Standard_B")
+      error_message = "Only burstable B-series VM sizes allowed"
+    }
   }
 }
