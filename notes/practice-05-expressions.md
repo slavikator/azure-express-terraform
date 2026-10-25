@@ -149,6 +149,8 @@ Remove `HTTPS` again (the app doesn't serve HTTPS), check that `plan` shows `No 
 
 This step is an experiment in a new file, `vms.tf`. The VMs go into `snet-mgmt`, the subnet you created in week 4.
 
+**Quota:** a trial subscription allows only **4 vCPUs per region**. Each `Standard_B2ls_v2` has 2, so the main VM plus two lab VMs (6 vCPUs) don't fit. Before this step, check `az vm list-usage -l swedencentral --query "[?name.value=='cores'].{current:currentValue, limit:limit}" -o table`. If needed, temporarily deallocate the main VM (`az vm deallocate -g rg-devops-demo-swe -n vm-demo-node`) and start it again after the step (`az vm start ...`). Deallocated VMs don't count toward the core quota.
+
 **Write `vms.tf`:**
 
 - a `locals` block with `lab_vms = { web = "Standard_B2ls_v2", api = "Standard_B2ls_v2" }` (name → size);
