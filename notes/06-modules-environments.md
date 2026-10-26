@@ -18,6 +18,26 @@ How to organize code the way a real team does.
 
 ## Concepts you need to explain in your own words
 
+### 0. What a module is, and why it's needed
+
+**A module is a folder of `.tf` files that other code can call, with inputs (variables) and outputs.** Every folder where you run `terraform` is the **root module**; a **child module** is one the root calls with a `module` block. Think of it as a function, or an npm package: inputs in, resources created, outputs back.
+
+**Without modules,** adding prod means copying every file. A fix then has to be made in every copy, someone forgets one, and environments drift apart.
+
+| Benefit | What it means |
+|---|---|
+| **Reuse** | write once, use in dev, prod and other projects |
+| **Consistency** | every environment is built the same way, by construction |
+| **Abstraction** | the caller sets a few inputs (`name = "prod"`), not 50 resource arguments |
+| **Encapsulation** | the details are hidden behind inputs and outputs |
+| **Standards** | a platform team builds security and tagging into modules; other teams just use them |
+| **Versioning** | pin a known-good version, upgrade deliberately |
+| **Smaller reviews** | a change is made and reviewed once, in one place |
+
+**When not to create one:** a single resource with nothing to hide ("thin wrapper"), or small code that will only ever be used once. Rule of thumb: create a module when the same group of resources is needed in more than one place, or when you want to hide complexity behind a simple interface.
+
+> **Interview answer:** A module is a reusable package of Terraform configuration: a folder of `.tf` files with input variables and outputs, called with a `module` block; every configuration is itself the root module. Modules let you define a pattern once and reuse it across environments and teams, which gives consistency, a simple interface, built-in standards and versioning, so changes are made and reviewed in one place.
+
 ### 1. Module structure
 
 ```
