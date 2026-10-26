@@ -90,7 +90,7 @@ moved {
 terraform workspace new prod
 terraform workspace select prod
 ```
-- One codebase, separate states (`env:/prod/...`).
+- One codebase, separate states. Each backend names them differently: S3 uses `env:/prod/<key>`, the `azurerm` backend stores a separate blob `<key>env:prod` next to the default one.
 - Downsides: it's easy to `apply` in the wrong workspace, all environments share the same backend and permissions, and differences between environments have to be written with `terraform.workspace` in the code.
 
 **Separate directories**
