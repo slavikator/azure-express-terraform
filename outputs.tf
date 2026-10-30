@@ -1,5 +1,5 @@
 output "vm_public_ip" {
-  value       = azurerm_linux_virtual_machine.vm.public_ip_address
+  value       = module.vm.public_ip
   description = "Public IP address of the Virtual Machine"
 }
 

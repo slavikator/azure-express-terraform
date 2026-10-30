@@ -5,7 +5,7 @@ resource "azurerm_resource_group" "rg" {
   tags     = local.tags
 }
 
-# 2. Virtual Network (private network)
+# 2. Network: VNet, subnets, NSG and NSG ↔ subnet association
 module "network" {
   source              = "./modules/network"
   name                = "demo"
@@ -13,19 +13,5 @@ module "network" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   tags                = local.tags
-}
-
-moved {
-  from = azurerm_virtual_network.main
-  to   = module.network.azurerm_virtual_network.main
-}
-
-moved {
-  from = azurerm_subnet.main
-  to   = module.network.azurerm_subnet.main
-}
-
-moved {
-  from = azurerm_subnet.mgmt
-  to   = module.network.azurerm_subnet.mgmt
+  nsg_rules           = var.nsg_rules
 }
