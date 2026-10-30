@@ -172,9 +172,79 @@ gh run watch
 gh run view --log-failed
 ```
 
+## Going deeper
+
+### 10. CI in practice
+
+**Continuous Integration:** small changes merged into `main` frequently, every push and PR checked automatically, fast feedback, `main` always green, merges gated by **branch protection** (required status checks). A pipeline has **triggers** (`on:`), **runners** (fresh VMs per job), **jobs** and **steps**, **secrets**, **artifacts**, and a status on the commit or PR.
+
+**Continuous delivery** keeps every change deployable behind an approval; **continuous deployment** applies automatically. My pipeline today: CI on push and PR (`fmt`, `plan`), apply only on manual `workflow_dispatch`: continuous delivery with a manual trigger.
+
+### 11. GitOps
+
+Git is the single source of truth, and an automated process keeps the environment matching it. The four principles: **declarative**, **versioned in Git**, **pulled automatically**, **continuously reconciled**.
+
+| | Push (classic CI/CD) | Pull (GitOps) |
+|---|---|---|
+| Who applies | the pipeline, holding production credentials | an agent **inside** the environment (Argo CD, Flux) |
+| Drift | stays until the next apply | reverted automatically within minutes |
+
+- Rollback = `git revert`; every change has an author and a review.
+- Secrets can't be in Git in plain text: SOPS, Sealed Secrets, External Secrets with Key Vault.
+- Most natural with Kubernetes (AKS has a built-in Flux extension). For Terraform: PR-driven workflows (Atlantis, HCP Terraform), plan on PR and apply on merge, plus drift detection.
+
+### 12. Scheduled drift detection
+
+A job on a schedule (`on: schedule: - cron: "0 6 * * *"`, always UTC, only from the default branch) runs:
+
+```
+terraform plan -refresh-only -detailed-exitcode -input=false -lock=false
+```
+
+- Exit `0` = no drift, `1` = error, `2` = differences → the job fails and alerts (email, Slack, or an auto-created issue).
+- **`-refresh-only`** reports only changes made outside Terraform; a normal plan also flags merged-but-unapplied code.
+- **`-lock=false`** and a **read-only identity** (Reader + state read): the job must not block or change anything.
+- It can't see resources created outside Terraform (not in the state): add **activity log alerts** for writes by anyone except the pipeline's identity.
+- Avoid noise (computed attributes, Modify policies) with `ignore_changes`, or alerts get ignored.
+
+### 13. The plan file in detail
+
+`plan -out=tfplan` saves the planned changes, the configuration, **variable values**, the prior state snapshot and provider versions in a binary file. `apply tfplan` executes exactly that, without re-planning or prompting.
+
+- If the state changed since the plan: `Saved plan is stale`. Different Terraform or provider versions, or a different `init`: refused.
+- **It contains secrets in plain text:** never commit it; store it as a short-lived artifact.
+- `terraform show -json tfplan` feeds policy checks (OPA, checkov), cost estimates (Infracost) and PR comments.
+
+### 14. GitHub environments in detail
+
+A named target (`dev`, `production`) that a job declares with `environment:`.
+
+- **Protection rules:** required reviewers (the job pauses until approved), prevent self-review, a wait timer, deployment branches/tags (only `main` may deploy to prod).
+- **Environment secrets and variables:** available only to jobs for that environment, after the rules pass. Separate credentials per environment.
+- **Deployment history:** what was deployed where, when, by whom.
+- **OIDC:** the subject becomes `repo:<owner>/<repo>:environment:production`, so the federated credential trusts only jobs that passed the protections.
+- ⚠️ In **private** repositories, protection rules and environment secrets need a paid GitHub plan; public repositories get them for free.
+
 ## Check yourself
 
-Rebuild your workflow: `plan` on PR with a comment, `apply` after merge with approval through the `production` environment, the plan as an artifact, `concurrency`, `tflint` and `checkov`. Add daily drift detection.
+Rebuild your workflow: `plan` on PR with a comment, `apply` after merge with approval through the `production` environment, the plan as an artifact, `concurrency`, `tflint` and `checkov`. Add daily drift detection. The hands-on exercise is in [`practice-09-cicd.md`](practice-09-cicd.md).
+
+## Interview answers
+
+**What is CI?**
+> Continuous Integration means merging small changes into the main branch frequently, with a pipeline that checks every push and pull request automatically, so problems are caught within minutes and main stays releasable. For Terraform it runs `fmt -check`, `validate`, tflint, a security scanner like checkov, and a `plan` posted to the PR. Continuous delivery keeps every change deployable behind an approval; continuous deployment applies automatically.
+
+**What is GitOps?**
+> Git is the single source of truth for the desired state. Everything is declared and changed through pull requests, and an agent like Argo CD or Flux inside the environment pulls from Git and continuously reconciles reality, so drift is reverted and CI needs no production credentials. Rollback is a `git revert`. For Terraform, the equivalent is plan on PR, apply on merge, plus scheduled drift detection; the main challenge is secrets, handled with SOPS or External Secrets.
+
+**How do you detect drift?**
+> A scheduled CI job runs `terraform plan -refresh-only -detailed-exitcode`, which exits with 2 when something changed outside Terraform, so the job fails and alerts. It runs read-only, with a Reader identity and `-lock=false`. When drift is found, I check the activity log for who made the change, then either reapply the code or update the code to match. Resources created outside Terraform aren't in the state, so I add activity log alerts for manual changes.
+
+**Why apply a saved plan?**
+> `plan -out` saves exactly what was reviewed, and `apply tfplan` executes only that; if the state changed in between, Terraform rejects the stale plan. The file contains secrets, so it's a short-lived artifact, never committed. Its JSON form feeds policy and cost checks.
+
+**What are GitHub environments for?**
+> A named deployment target with protection rules (required reviewers, prevent self-review, allowed branches) and environment-scoped secrets available only after those rules pass. The apply job targets `production`, so it waits for approval before applying the saved plan. With OIDC, the subject becomes `environment:production`, so Azure only trusts jobs that passed those protections.
 
 ## Interview questions
 
@@ -187,3 +257,7 @@ Rebuild your workflow: `plan` on PR with a comment, `apply` after merge with app
 - How does GitHub Actions authenticate to Azure without a password?
 - GitHub Actions or Azure DevOps: what do you know about both?
 - How do you split permissions between plan and apply?
+- What is GitOps, and how is it different from push-based CI/CD?
+- How do you detect drift on a schedule without blocking real applies?
+- What does a saved plan file contain, and how do you store it?
+- What do GitHub environments give you?

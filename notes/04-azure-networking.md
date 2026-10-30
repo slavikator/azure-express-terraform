@@ -253,6 +253,78 @@ Answer in this order:
 - **Peering is two resources**, one per direction (section 6).
 - **Associations** (NSG ↔ subnet, NSG ↔ NIC) are separate Terraform resources, but not separate Azure objects, so they have no tags.
 
+## More services, in short
+
+### 18. Load Balancer
+
+A layer 4 (TCP/UDP) service that spreads connections across a **backend pool** of VMs by a 5-tuple hash. Parts: **frontend IP** (public or private), **backend pool**, **health probe**, **load-balancing rule**, plus **inbound NAT rules** (one port → one VM) and **outbound rules** (SNAT).
+
+- It doesn't terminate connections: the VM sees the client's IP. It doesn't understand HTTP.
+- Standard SKU (Basic is retired) is **closed by default**: the NSG must allow the traffic.
+- **Health probes come from `168.63.129.16`**, allowed by `AllowAzureLoadBalancerInBound`. A higher-priority "deny all" rule makes every VM look unhealthy and takes the service down.
+- **HA ports** on an internal LB balance all ports at once, for firewalls (NVAs) in a hub.
+- Terraform: `azurerm_lb`, `azurerm_lb_backend_address_pool`, `azurerm_lb_probe`, `azurerm_lb_rule`, plus a NIC ↔ pool association.
+
+| | Load Balancer | Application Gateway |
+|---|---|---|
+| Layer | L4 | L7 HTTP/HTTPS |
+| TLS termination, URL path routing, WAF | ❌ | ✅ |
+| Protocols | anything over TCP/UDP | HTTP/HTTPS |
+
+### 19. NAT and NAT Gateway
+
+**NAT** rewrites addresses at a network's edge so private IPs can use the internet. **SNAT** changes the source of outgoing traffic, **DNAT** the destination of incoming traffic, and **ports** let many machines share one public IP (about 64,000 per IP).
+
+**NAT Gateway** is outbound-only SNAT for a **whole subnet**, through static public IPs or a prefix:
+- it wins over a VM's public IP and Load Balancer outbound rules for **outbound** traffic;
+- **no inbound connections** through it;
+- the answer to SNAT port exhaustion, to "partners must allowlist one IP", and to the retirement of default outbound access;
+- zonal; billed per hour plus per GB.
+
+### 20. Azure Bastion
+
+A managed jump host: admins connect to VMs over SSH/RDP **through Azure**, over HTTPS, with their **Entra ID identity**, so VMs need no public IP and port 22 isn't open to the internet.
+
+- Needs a subnet named exactly `AzureBastionSubnet`, `/26` or larger, and a Standard public IP.
+- VMs' NSG: allow 22/3389 only from the Bastion subnet.
+- One Bastion in a hub serves peered spokes.
+- SKUs: Developer (free, minimal), Basic, Standard (native SSH client, `az network bastion ssh`), Premium (session recording).
+- Billed hourly even when idle. The real fix when an IP allowlist doesn't work because your IP is dynamic.
+
+### 21. Web Application Firewall (WAF)
+
+Inspects HTTP requests at **layer 7** and blocks attacks like SQL injection and XSS (the **OWASP Top 10**) that an NSG can't see.
+
+- **Managed rule sets** (Microsoft's Default Rule Set, OWASP CRS, bot protection) plus **custom rules** (geo-blocking, IP lists, rate limiting).
+- **Detection** mode only logs; **Prevention** blocks with `403`. Roll out in Detection, tune false positives with exclusions, then switch to Prevention.
+- Runs as a policy on **Application Gateway** (regional) or **Front Door** (global, at the edge).
+- Complements NSGs and Azure Firewall; doesn't replace secure code.
+
+### 22. Application Security Groups (ASG)
+
+A named group of NICs used in NSG rules **instead of IP addresses**: "`asg-web` → `asg-app` on 8080". New VMs get the rules by joining the group, with no rule changes.
+
+- All members must be in the **same VNet**: across peered VNets you use IP ranges or service tags.
+- Service tags are groups Microsoft defines (`Internet`, `Storage`); ASGs are groups of your own VMs.
+- Terraform: `azurerm_application_security_group` plus a NIC ↔ ASG association; rules use `source_application_security_group_ids`.
+
+### 23. On-premises and ExpressRoute
+
+**On-premises** is a company's own infrastructure outside the cloud. In a **hybrid** setup it's connected to Azure privately, usually to the hub VNet:
+
+| | Site-to-site VPN | ExpressRoute |
+|---|---|---|
+| Path | the internet, inside IPsec | a private provider network |
+| Encrypted | always | **not by default** (add IPsec or MACsec) |
+| Bandwidth / latency | up to a few Gbps, variable | up to 10 Gbps (100 with Direct), predictable |
+| Setup | minutes | weeks: a provider contract |
+
+ExpressRoute: a **circuit** with two redundant links, BGP routing, **private peering** (to VNets) and **Microsoft peering** (Microsoft 365, PaaS public endpoints), an ExpressRoute gateway in `GatewaySubnet`. A VPN is often kept as a backup.
+
+### 24. The Microsoft backbone
+
+Microsoft's private global network connecting all regions and edge locations. Traffic between Azure resources (VNets, peering, private and service endpoints, region-to-region replication) stays on it and never crosses the public internet; traffic between datacenters is also encrypted at the link layer (MACsec). Front Door uses "cold potato" routing: users enter at the nearest edge location and travel the rest on the backbone.
+
 ## Terraform example
 
 ```hcl
@@ -287,6 +359,44 @@ az network watcher test-ip-flow ...       # will the NSG let a specific packet t
 ## Check yourself
 
 Draw a hub-spoke network with NSGs and explain what an HTTP request from the internet passes through on its way to a VM: public IP → subnet NSG → NIC NSG → VM. Work out how many VMs fit in a `/27`. The hands-on exercise is in [`practice-04-networking.md`](practice-04-networking.md).
+
+## Interview answers
+
+**What is CIDR?**
+> CIDR describes an address range as a base address plus a prefix length: `10.0.1.0/24` means the first 24 of 32 bits are the network and the remaining 8 are hosts, so 256 addresses. It replaced fixed class A/B/C sizes, so networks can be sized to need and routes can be aggregated.
+
+**How many usable addresses in a `/28`?**
+> A `/28` leaves 4 bits for hosts: 16 addresses. Azure reserves 5 in every subnet: the network address, the default gateway (`.1`, a virtual gateway provided by Azure's SDN), two for Azure DNS (`.2`, `.3`), and the last address for broadcast, even though VNets don't support broadcast. So 11 are usable, and the first VM gets `.4`.
+
+**How are NSGs on both the subnet and the NIC evaluated?**
+> Both are evaluated independently, and traffic passes only if both allow it. Inbound is checked by the subnet's NSG first, then the NIC's; outbound is the reverse. Within each NSG, the matching rule with the lowest priority number decides. NSGs are stateful, so return traffic is allowed automatically. To find where something is blocked, I use effective security rules or Network Watcher's IP flow verify.
+
+**Explain VNet peering.**
+> Peering connects two VNets privately over the Microsoft backbone, with no gateway and no extra latency. It's two links, one created on each side: until both exist the state is `Initiated` and no traffic flows. It's non-transitive, so in hub-spoke the spokes talk through a firewall in the hub with UDRs, and reach on-prem through the hub's gateway with gateway transit. Address spaces must not overlap, and traffic is billed per GB in both directions.
+
+**How does Azure pick a route?**
+> The longest matching prefix wins; with equal prefixes, a user-defined route beats BGP, which beats system routes. That's why `10.1.0.0/16 → VNetPeering` beats the default `10.0.0.0/8 → None`, and why a UDR `0.0.0.0/0 → VirtualAppliance` sends a spoke's internet traffic through the hub firewall.
+
+**Service endpoint or private endpoint?**
+> A service endpoint keeps the service's public IP but routes traffic from a subnet over the backbone and identifies the subnet, so the service's firewall can allow only it. It's free, but works only from that subnet, not from on-prem or peered VNets, and covers the whole service type. A private endpoint gives one specific resource a private IP in the VNet, so public access can be disabled. It works from peered VNets and on-prem, but needs a `privatelink` private DNS zone linked to the VNets, and costs money. Today it's the recommended default.
+
+**Load Balancer: what is it?**
+> A layer 4 load balancer that distributes TCP/UDP connections across a backend pool by a 5-tuple hash. Health probes from `168.63.129.16` decide which VMs receive traffic. It can be public or internal; Standard SKU is closed by default and can be zone-redundant. For TLS termination, path routing or a WAF, I'd use Application Gateway.
+
+**NAT and NAT Gateway?**
+> NAT rewrites addresses at a network's edge: SNAT for outgoing traffic, DNAT for incoming, with ports letting many machines share one IP. NAT Gateway is managed outbound-only SNAT for a subnet, through static public IPs with about 64,000 SNAT ports each. I'd use it for a fixed outbound IP, to avoid SNAT port exhaustion, and because default outbound access is being retired. It doesn't allow inbound connections.
+
+**How do you reach a VM securely without opening SSH to the internet?**
+> Azure Bastion: admins connect over HTTPS with their Entra ID identity, and Bastion connects to the VM's private IP, so the VM needs no public IP. It needs `AzureBastionSubnet` (`/26`+) and a Standard public IP, and one Bastion in a hub can serve peered spokes. It's billed hourly, which is the trade-off against an IP allowlist or a jump box.
+
+**What is a WAF?**
+> A Web Application Firewall inspects HTTP requests at layer 7 and blocks attacks like SQL injection and XSS, using managed rule sets plus custom rules like geo-blocking and rate limiting. In Azure it runs on Application Gateway or Front Door. I'd start in Detection mode, tune false positives, then switch to Prevention. It complements NSGs and Azure Firewall and doesn't replace secure code.
+
+**What is an Application Security Group?**
+> A logical group of NICs used as a source or destination in NSG rules instead of IP addresses, so rules express intent like "web → app on 8080", and new VMs get the right rules by joining a group. It enables micro-segmentation within a subnet; members must be in the same VNet.
+
+**ExpressRoute vs VPN?**
+> ExpressRoute is a private connection from on-premises to Azure through a provider, not the internet, with predictable latency, up to 10 Gbps (100 with Direct), two redundant links and BGP. It isn't encrypted by default. A site-to-site VPN goes over the internet in an IPsec tunnel: cheaper and quick to set up, but less predictable. A VPN is often kept as a backup for ExpressRoute.
 
 ## Interview questions
 

@@ -290,6 +290,28 @@ Explain out loud in 2 minutes, without looking:
 
 The answer has to go through the chain: SP → token from Entra ID → request to ARM → RBAC check → resource provider creates the resource.
 
+The hands-on exercise is in [`practice-01-rbac-robot.md`](practice-01-rbac-robot.md).
+
+## Going deeper
+
+### 9. Control plane vs data plane
+
+Every Azure service has two separate APIs:
+
+| | Control plane | Data plane |
+|---|---|---|
+| What | **managing the resource**: create, delete, change settings | **working with its contents**: blobs, secrets, messages, rows |
+| Endpoint | ARM: `management.azure.com` | the service itself: `<account>.blob.core.windows.net`, `<vault>.vault.azure.net` |
+| Permissions | Azure RBAC roles like Owner, Contributor, Reader | **data roles**: Storage Blob Data Reader, Key Vault Secrets User... (or the service's own keys) |
+| Resource locks | ✅ apply | ❌ don't apply |
+| Logged in | the activity log | resource logs (diagnostic settings) |
+
+- **Contributor on a storage account doesn't mean you can read its blobs with Entra auth.** That needs a data role. (Contributor can still fetch the account **keys** through `listKeys`, which is why keys are dangerous.)
+- A `CanNotDelete` lock doesn't stop writing blobs: writing is data plane (week 3).
+- Each plane needs its own token audience (week 8).
+
+> **Interview answer:** Azure separates the control plane, which is ARM managing resources themselves with Azure RBAC roles, from the data plane, which is each service's own API for its contents, with data roles like Storage Blob Data Reader or the service's keys. Owner or Contributor don't automatically grant data access through Entra ID; resource locks and the activity log only cover the control plane.
+
 ## Interview questions
 
 - How does a tenant differ from a subscription?

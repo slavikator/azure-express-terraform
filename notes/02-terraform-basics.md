@@ -642,6 +642,25 @@ terraform providers              # which providers are needed and where from
 
 Without documentation, write from scratch an RG + VNet + subnet with a `location` variable, tags through `locals`, and an output with the subnet ID. Explain every line.
 
+The hands-on exercise is in [`practice-02-terraform-basics.md`](practice-02-terraform-basics.md).
+
+## Interview answers
+
+**How does Terraform decide the order of creating resources?**
+> Terraform builds a dependency graph from references between resources (implicit dependencies) and `depends_on` (explicit ones). A resource is created as soon as everything it depends on is ready, and independent resources are created in parallel, up to 10 at once by default. Destroy runs in reverse order. The order of blocks in files doesn't matter.
+
+**What happens with `-/+` vs `~`?**
+> `~` is an update in place: the same resource, same ID, only an attribute changes, like tags. `-/+` means the change can't be made in place, like a new `location` or `name`, so Terraform destroys the resource and creates a new one; the plan marks the attribute with `# forces replacement`. Dependent resources may be replaced too, and data on the resource is lost, so I always check the `Plan:` line for destroys before typing yes.
+
+**Why does a refactor show `No changes`?**
+> Terraform compares the values the code produces with the state, not how the code is written. Replacing a literal with a variable, a `local`, a function like `cidrsubnet` or a `dynamic` block produces the same values, so the plan is `No changes`, which proves the refactor is correct.
+
+**How do you test an expression before using it?**
+> `terraform console`: an interactive evaluator with the same functions and the real configuration and state, so I can try `cidrsubnet(...)`, `for` expressions or read a resource attribute like `azurerm_public_ip.pip.ip_address` without planning.
+
+**Who did Terraform sign in as?**
+> Locally, the `azurerm` provider uses my `az login`, so I act as myself; `azurerm_client_config` then returns the Azure CLI's client ID and my user's object ID. In CI it signs in as a service principal, with a secret today and with OIDC federation later, so the client ID is that app registration's.
+
 ## Interview questions
 
 - What does `terraform init` do?

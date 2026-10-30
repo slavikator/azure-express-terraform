@@ -177,6 +177,53 @@ terraform state pull > backup.tfstate     # local copy of the state
 
 Deliberately desync the code, state and Azure in three ways: create a resource by hand, delete a resource by hand, change an attribute by hand. Recover from each case and explain what you did. The full exercise is in [`practice-03-state.md`](practice-03-state.md).
 
+## Code, state and Azure: what `plan` shows
+
+| # | Code | State | Azure | Plan |
+|---|---|---|---|---|
+| 1 | ❌ | ❌ | ✅ | `No changes`: Terraform doesn't know the resource exists → `import` |
+| 2 | ✅ | ❌ | ✅ | `+ create`, and `apply` fails with `already exists` → `import` |
+| 3 | ✅ | ✅ | ❌ | refresh drops it from the state → `+ create` |
+| 4 | ✅ | ✅ | ✅, different value | `~` back to the code (or `-/+` if the attribute forces replacement) |
+| 5 | ❌ | ✅ | ✅ | `- destroy` |
+
+Refresh only reads resources **that are in the state**. Terraform never searches Azure for anything else.
+
+## Interview answers
+
+**What is state, and why is it needed?**
+> State is Terraform's record of what it manages: each resource address mapped to its real Azure ID, with all attributes. Terraform doesn't search Azure by name, so without state it couldn't know a resource exists, couldn't detect that a removed block means a resource must be deleted (it would stay as an orphan), and would try to create everything again on every apply.
+
+**What happens if two people run `apply` at the same time?**
+> The second one fails immediately with "Error acquiring the state lock" and shows who holds it. It doesn't queue unless you add `-lock-timeout`. With the `azurerm` backend, the lock is an infinite lease on the state blob, so a crashed run leaves it locked until `terraform force-unlock <ID>`, used only after confirming nobody else is running.
+
+**Ctrl+C during `apply`: what happens?**
+> One Ctrl+C is a graceful stop: Terraform waits for operations in progress, writes their results to the state and releases the lock. Two Ctrl+C presses exit immediately: Azure may still finish creating a resource, but it's not recorded in the state, so the next plan wants to create it and fails with "already exists". The fix is to check the lock, the state and Azure with commands, then `import` the resource.
+
+**A resource was created by hand. How do you bring it under Terraform?**
+> With an `import` block (Terraform 1.5+), which goes through `plan` and code review, plus the resource's code, written by hand or generated with `plan -generate-config-out`. After the import, `plan` must show `No changes`: that proves the code matches the real resource. If it shows changes, apply would modify or even recreate the real resource, so I fix the code first.
+
+**`state rm` vs `destroy`?**
+> `state rm` only removes the resource from the state: it stays in Azure, and if its code is still there the next plan wants to create it again. `destroy` deletes it in Azure and removes it from the state. To stop managing a resource without deleting it, the code-based way is a `removed` block with `destroy = false`.
+
+**Why is state a secret, and how do you protect it?**
+> State stores every attribute in plain text, including passwords, keys and connection strings; `sensitive` only hides values in CLI output. So it's kept in a separate resource group, with versioning and soft delete for recovery, a `CanNotDelete` lock (not ReadOnly, which blocks `listKeys`), TLS 1.2, minimal RBAC access, ideally Entra auth instead of account keys, and no public network access.
+
+**How do you move a resource from one state to another?**
+> In the source configuration, a `removed` block with `lifecycle { destroy = false }` takes it out of the state without deleting it; in the destination, an `import` block plus its code takes it in. The old way, `state rm` and `terraform import`, does the same by hand, without review.
+
+**How do you rename a resource without recreating it?**
+> A `moved` block from the old address to the new one. It's in the code, so it's reviewed and applied automatically in every environment, unlike `state mv`. It also handles `count` to `for_each` migrations and moving resources into modules.
+
+**What is drift, and how do you detect it?**
+> Drift is a difference between the real resource and the state, usually from a manual change. A normal `plan` shows it and plans to revert it to the code; `plan -refresh-only` shows only what changed outside Terraform. `apply -refresh-only` writes reality into the state but doesn't change the code, so the next plan still reverts it: to accept a manual change, I change the code. Scheduled drift detection runs this in CI.
+
+**Why can't the `backend` block use variables?**
+> The backend is configured during `init`, before variables are evaluated: Terraform must know where the state is before it can run anything. Values are written explicitly or passed with `-backend-config` (partial configuration). Without them, `init` waits for input, which hangs CI, so CI always uses `-input=false`.
+
+**How do you restore a corrupted state?**
+> With blob versioning on, every write keeps the previous version. I check versions first (download one and look at its `serial` and resource count), then copy the right version over the current blob: "Make current version" in the Portal, or `az storage blob copy start` with `?versionid=`. Restoring a version that lists resources which no longer exist makes Terraform plan against resources that are gone, so the choice must be deliberate.
+
 ## Interview questions
 
 - What is state, and why is it needed?

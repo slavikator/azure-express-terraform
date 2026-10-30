@@ -171,9 +171,148 @@ az keyvault secret show --vault-name <kv> -n app-password --query value -o tsv
 az policy assignment list -o table
 ```
 
+## Going deeper
+
+### 9. Where Key Vault lives
+
+A regional PaaS resource in a resource group, like any other. Contents are stored on Microsoft-managed, HSM-backed infrastructure in that region, replicated to the paired region for read-only failover. It's reached at a **globally unique public URL** (`https://<name>.vault.azure.net`); for private access, add a private endpoint and disable public access. Two gates: the **network**, and **identity** (Entra ID + RBAC).
+
+Tiers: **Standard** (software-protected keys), **Premium** (HSM-protected keys), **Managed HSM** (a dedicated HSM pool, a separate service).
+
+### 10. Managed identity + Key Vault: the full flow
+
+```
+app on the VM ──① "token for Key Vault"──► IMDS 169.254.169.254 (only reachable from inside the VM)
+              ◄─② token signed by Entra ID: "this is the VM's identity"
+              ──③ GET secret + token ─────► Key Vault
+                                            ④ valid token? RBAC role on this vault?
+              ◄─⑤ the secret ──────────────
+```
+
+This removes **"secret zero"**: no credential is needed to get the other credentials. Terraform: an `identity` block on the VM + `azurerm_role_assignment` (`Key Vault Secrets User`, scoped to the vault). In code, the SDK's `DefaultAzureCredential` does steps ①–③: managed identity in Azure, `az login` locally.
+
+**System-assigned vs user-assigned, the pitfalls:** role assignments take minutes to propagate, so first access right after creation can fail; recreating a resource with a system-assigned identity creates a **new** identity (anything granted outside Terraform is lost); with several identities on one resource, the code must name one by client ID; a VMSS's system-assigned identity is shared by all instances.
+
+### 11. OpenID Connect in detail
+
+OIDC is an identity layer on top of **OAuth 2.0** (authorization). An **identity provider** (issuer) issues signed **JWTs**; a **relying party** verifies them.
+
+- A JWT is `header.payload.signature`, base64-encoded. The payload's **claims**: `iss` (issuer), `sub` (subject), `aud` (audience), `exp` (expiry). It's encoded, **not encrypted**: anyone holding it can read it.
+- The issuer signs with its **private key** (RS256). It publishes the matching **public keys** (JWKS), found through `https://<issuer>/.well-known/openid-configuration`. The token header's `kid` names the key used.
+- The relying party verifies the signature, then `iss`, `aud`, `exp` and `sub`. A token can't be forged without the private key, and changing any claim breaks the signature. HTTPS and the issuer's TLS certificate prove the keys really come from that issuer.
+
+### 12. Workload Identity Federation (WIF)
+
+Entra ID trusts tokens from an **external** OIDC issuer instead of a password. Configured as a **federated credential** on an app registration or a **user-assigned managed identity**:
+
+| Field | Meaning | Example |
+|---|---|---|
+| Issuer | who must have issued the token | `https://token.actions.githubusercontent.com` |
+| Subject | whom it's about: matched **exactly** | `repo:slavikator/azure-express-terraform:ref:refs/heads/main` |
+| Audience | for whom it's intended | `api://AzureADTokenExchange` |
+
+It holds **no secret**. One identity can have about 20, one per branch, PR or environment pattern.
+
+**The audience** prevents replay: a token issued for one service is rejected by another. In the GitHub flow there are two tokens: GitHub's (audience `api://AzureADTokenExchange`, for Entra's exchange) and Entra's (audience `https://management.azure.com/`, for ARM).
+
+**Each workflow run** (one execution, triggered by a push, PR or dispatch) requests its own token while it runs, valid for minutes, describing that repo, branch, commit and run. A **job** with `environment: production` gets the subject `repo:<owner>/<repo>:environment:production`. The classic error is `AADSTS70021`: no federated credential matches the subject.
+
+Beyond GitHub: **Azure DevOps** service connections, **AKS workload identity** (a pod's Kubernetes service account, subject `system:serviceaccount:<ns>:<sa>`), GitLab, Terraform Cloud, other clouds.
+
+**The rule:** code on Azure resources → managed identity; code outside Azure on an OIDC-capable platform → federation; secrets only as a last resort.
+
+### 13. How the access token is used
+
+After the exchange, Entra issues an access token for the service principal, valid about an hour, for **one API** (`aud`). Terraform sends it on every request as `Authorization: Bearer <token>`. For each request, ARM validates the token, identifies the principal by its object ID (`oid`), checks **RBAC** for that action on that scope, forwards to the resource provider, and logs it in the activity log. Other APIs need their own tokens: `https://storage.azure.com/` (the state blob with `use_azuread_auth`), `https://vault.azure.net`, `https://graph.microsoft.com/`.
+
+### 14. Entra authentication vs local auth
+
+"Local auth" is a service's own credentials: storage keys and SAS, SQL passwords, Service Bus SAS keys, Cosmos DB keys. **Entra authentication** replaces them with tokens: the identity gets a token for the service's audience, and the service maps it to permissions (data-plane RBAC, or database users created `FROM EXTERNAL PROVIDER` in Azure SQL).
+
+| Service | Turn off local auth |
+|---|---|
+| Storage | `shared_access_key_enabled = false` |
+| Azure SQL | "Microsoft Entra-only authentication" |
+| Service Bus, Event Hubs | `local_auth_enabled = false` |
+| Cosmos DB | `local_authentication_disabled = true` |
+
+Turning off local auth is the important second step: leaked keys stop working. Often enforced by Azure Policy.
+
+### 15. Keeping secrets out of the state, in full
+
+1. **Make the secret unnecessary:** managed identity + Entra auth; disable local auth so exported keys in the state are useless.
+2. **Keep it outside Terraform:** create it directly in Key Vault; the app reads it at runtime.
+3. **`ephemeral` values** (1.10+) and **write-only arguments** (1.11+; per resource in newer providers, e.g. azurerm 4.x).
+4. `sensitive` doesn't protect the state.
+5. **Protect the state** for whatever remains.
+
+OIDC removes the CI credential, which is never stored in the state anyway.
+
+### 16. Privileged Identity Management (PIM)
+
+Just-in-time admin access: people are **eligible** for a role and **activate** it when needed, with MFA, a justification, optionally an approval, for a limited time (e.g. 2 hours). Covers Entra roles, Azure RBAC roles and group membership (PIM for Groups); adds audit history and **access reviews**. Keep 1–2 **break-glass** accounts outside PIM for emergencies. Requires **Entra ID P2** (or ID Governance). Not for pipelines: they get narrowly scoped roles. Terraform: `azurerm_pim_eligible_role_assignment`.
+
+### 17. Customer-managed keys (CMK)
+
+All data at rest is encrypted by default with **platform-managed keys**. With CMK, the key is yours, in Key Vault or Managed HSM. **Envelope encryption:** data is encrypted with a data key (DEK), which is wrapped by your key (the KEK); the service unwraps it through Key Vault with its managed identity (role **Key Vault Crypto Service Encryption User**).
+
+- Gives control, rotation on your schedule, an audit of every key use, and revocation (disable the key → data unreadable, "crypto-shredding"). Often a compliance requirement.
+- Risks: losing the key means losing the data (soft delete and **purge protection are required**); an unreachable vault means an outage.
+- Usually needs a **user-assigned** identity, so the role exists before the resource.
+- Related: **BYOK** (import your own key), double encryption, client-side encryption.
+
+### 18. Azure Policy in detail
+
+**Definition** (`if` + `then` effect) → **initiative** (a set) → **assignment** to a management group, subscription or RG, inherited downwards; **parameters**; **exemptions**. Hundreds of built-ins.
+
+| Effect | Behavior |
+|---|---|
+| Deny | rejects the request |
+| Audit | allows it, marks non-compliant |
+| Modify / Append | changes the request (e.g. adds a tag) |
+| DeployIfNotExists | deploys something related afterwards |
+
+- Classic guardrails: **Allowed locations** (data residency), **required tags** (cost allocation), **no public IPs** (access through Bastion).
+- Deny is checked by ARM when the request arrives: **`plan` doesn't see policies, only `apply` fails** (`RequestDisallowedByPolicy`). Catch it earlier with checkov or OPA in CI.
+- **Modify policies cause Terraform drift** unless the code contains the same values (or `ignore_changes`).
+- Existing resources are evaluated about every 24 hours and reported; **remediation tasks** fix them, using a managed identity.
+- Roll out in **Audit** before **Deny**.
+
 ## Check yourself
 
-Move your workflow to OIDC and delete `AZURE_CLIENT_SECRET` from GitHub. Create a Key Vault, give the VM a managed identity with the `Key Vault Secrets User` role, and read a secret from the VM without any password.
+Move your workflow to OIDC and delete `AZURE_CLIENT_SECRET` from GitHub. Create a Key Vault, give the VM a managed identity with the `Key Vault Secrets User` role, and read a secret from the VM without any password. The hands-on exercise is in [`practice-08-security.md`](practice-08-security.md).
+
+## Interview answers
+
+**Managed identity and Key Vault: how does it work?**
+> A managed identity gives an Azure resource its own identity in Entra ID, with no password. Code on the VM gets a token from the local metadata endpoint (IMDS) and calls Key Vault with it; Key Vault validates the token and checks the RBAC role assignment, like `Key Vault Secrets User` on that vault, and returns the secret. That removes "secret zero". In Terraform it's an `identity` block plus an `azurerm_role_assignment` scoped to the vault.
+
+**System-assigned or user-assigned identity?**
+> Both are secretless; the difference is lifecycle. A system-assigned identity lives and dies with one resource: simple, nothing left behind. A user-assigned identity is a standalone resource that can be shared, granted roles before the resources exist, and survives when they're recreated, so it fits shared access, customer-managed keys, frequently replaced resources and federated credentials.
+
+**Why is OIDC better than a client secret, and how does Azure trust GitHub's token?**
+> There's no long-lived secret: each run gets a GitHub token valid for minutes, signed with GitHub's private key. Entra knows the issuer from the federated credential, fetches GitHub's public keys from its well-known JWKS endpoint, verifies the signature, then the issuer, audience, expiry and subject (repo plus branch or environment). Only then does it issue a short-lived access token for the service principal. A token can't be forged without GitHub's key, and a stolen one is useless after minutes or from another repo.
+
+**What is Workload Identity Federation?**
+> It lets an external workload get Azure access without a secret. A federated credential on an app registration or user-assigned managed identity tells Entra to trust tokens with a specific issuer, subject and audience. GitHub Actions, Azure DevOps, AKS pods through workload identity and other platforms use it. Managed identity for code on Azure, federation for external platforms, secrets as a last resort.
+
+**What is the audience?**
+> The intended recipient of a token, in its `aud` claim. Services reject tokens with another audience, so a token issued for one service can't be replayed against another. The GitHub token's audience is `api://AzureADTokenExchange`; the resulting Entra token's audience is the API, like `https://management.azure.com/`.
+
+**How do you keep a secret out of the Terraform state?**
+> Avoid the secret: managed identities and Entra auth for databases, storage and Key Vault, with local auth disabled so exported keys are useless. Keep necessary secrets outside Terraform, created in Key Vault and read by the app at runtime. Use ephemeral values and write-only arguments in newer Terraform versions. `sensitive` only hides output, and whatever remains is covered by protecting the state itself.
+
+**What is Entra authentication?**
+> A service accepting Entra ID tokens instead of its own local credentials, like storage keys, SQL passwords or SAS keys. The service maps the identity to data-plane roles or database users, so there's no shared secret, every access is attributable, and access is revoked per identity. The key follow-up is disabling local auth, often enforced with Azure Policy.
+
+**What is PIM?**
+> Just-in-time privileged access: admins are eligible for a role and activate it when needed, with MFA, a justification, optionally an approval, for a limited time. It covers Entra roles, Azure RBAC roles and groups, with audit history and access reviews, and removes standing admin privileges. Pipelines don't use it; break-glass accounts stay outside it.
+
+**What are customer-managed keys?**
+> Azure encrypts all data at rest by default with platform-managed keys. With CMK, the key lives in my Key Vault or Managed HSM; services use envelope encryption, wrapping their data key with my key through Key Vault and their managed identity. That gives control over rotation, an audit of every use, and revocation by disabling the key. The risk is that losing the key loses the data, so soft delete and purge protection are mandatory.
+
+**What is Azure Policy?**
+> It enforces rules on resource configuration regardless of who makes the request, while RBAC controls who can act. A definition has a condition and an effect (Deny, Audit, Modify, DeployIfNotExists), is grouped into initiatives and assigned to a scope where it's inherited. Typical guardrails are allowed locations, required tags and no public IPs. Deny is checked by ARM at apply time, so Terraform's plan won't show it, and Modify policies can cause drift unless the code matches.
 
 ## Interview questions
 
@@ -186,3 +325,10 @@ Move your workflow to OIDC and delete `AZURE_CLIENT_SECRET` from GitHub. Create 
 - Who can read your Terraform state, and how do you limit it?
 - Why soft delete and purge protection?
 - What is Azure Policy, and how does it differ from RBAC?
+- How does Azure verify that a GitHub OIDC token is genuine?
+- What is a federated credential, and what is the audience for?
+- How is the Azure access token used by Terraform?
+- What is Entra authentication, and why disable local auth?
+- What is PIM?
+- What are customer-managed keys, and what are the risks?
+- Why doesn't `terraform plan` catch a Deny policy?

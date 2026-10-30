@@ -111,6 +111,23 @@ What you must cover:
 - **Action:** through the activity log I found that the resources had been created by the CI service principal. The cause: `apply` on every push to main.
 - **Result:** I left only `plan` on push, and I run `apply` manually. The lesson: a pipeline with auto-apply conflicts with manual changes; you need explicit approval.
 
+### Story 5. A double Ctrl+C left a VM outside the state
+- **Situation:** during `apply -replace` of a VM, the process was killed (simulating a laptop dying). The next `plan` wanted to create the VM again.
+- **Task:** recover without losing or duplicating anything.
+- **Action:** diagnosed with commands, not guesses: the state lock was free, `state list` didn't contain the VM, but `az vm show` showed it in Azure as `Succeeded`. Azure had finished creating it after Terraform was killed. Imported it with an `import` block, checked `plan` showed `1 to import, 0 to change`, then `No changes`.
+- **Result:** no duplicate VM, no data loss. Lessons: one Ctrl+C is a graceful stop that records results; check lock, state and Azure separately; "not in the state" doesn't mean "not in Azure".
+
+### Story 6. Trial quotas and partial applies
+- **Situation:** an `apply` failed with `PublicIPCountLimitReached` (3 public IPs per region), and another with the regional vCPU quota (4 cores), while other resources in the same apply succeeded.
+- **Task:** understand what was created and finish the deployment.
+- **Action:** checked usage with `az network list-usages` and `az vm list-usage`; saw that Terraform had recorded exactly what succeeded (a partial apply, not a broken state). Redesigned the exercise to use resources without tight quotas, and re-ran `apply` once parallel deletions had released cores. Also learned that deallocated VMs still count toward the vCPU quota.
+- **Result:** completed without manual state edits. Lessons: check quotas before big changes; independent resources are created in parallel, so a create can race a delete; the state always reflects what actually happened.
+
+### Story 7. A `count` list nearly recreated resources
+- **Situation:** removing the first item from a list used with `count` showed `2 to add, 3 to destroy` instead of deleting one resource.
+- **Action:** recognized that `count` addresses are positions, so every later item shifted. Migrated to `for_each` with three `moved` blocks (plan: only `has moved to`), then removed the item again: `1 to destroy`, and the remaining resources kept their IDs.
+- **Result:** a safe pattern for collections: `for_each` with stable keys, and `moved` blocks for migrations.
+
 Tell each one out loud in 2 minutes.
 
 ## Exams
@@ -121,7 +138,24 @@ Tell each one out loud in 2 minutes.
 
 ## Check yourself
 
-Walk an interviewer through your project in 5 minutes: the architecture, why you chose these services, how state and CI/CD work, what broke and how you fixed it. Then ask Claude for a mock interview: 10 Terraform and Azure questions with feedback on your answers.
+Walk an interviewer through your project in 5 minutes: the architecture, why you chose these services, how state and CI/CD work, what broke and how you fixed it. Then ask Claude for a mock interview: 10 Terraform and Azure questions with feedback on your answers. The hands-on exercise is in [`practice-10-interview.md`](practice-10-interview.md).
+
+## Interview answers
+
+**Terraform or Bicep for a new Azure company?**
+> Bicep if the team is Azure-only and new to IaC: no state file to manage, and new Azure features are available immediately. Terraform if they use several clouds or SaaS providers like GitHub or Cloudflare, already know Terraform, or want its module ecosystem and `plan` workflow. Both are declarative; the big operational difference is Terraform's state.
+
+**How would you migrate manually created infrastructure into Terraform?**
+> Inventory with Azure Resource Graph, then write or generate the code (`plan -generate-config-out`, or aztfexport) and bring resources in with `import` blocks, in small batches. Each batch must reach `No changes` before the next, which proves the code matches reality. Then stop manual changes: RBAC, Azure Policy and drift detection.
+
+**What are RTO and RPO?**
+> RTO is how quickly a system must be back after a failure; RPO is how much data, measured in time, it's acceptable to lose. They drive the design: zone-redundant services and autoscaling for availability, backups and geo-replication sized to the RPO, and a tested failover plan to meet the RTO.
+
+**How would you organize Terraform for five teams?**
+> Shared, versioned modules (our own or Azure Verified Modules) maintained by a platform team; separate root configurations and states per team and environment, each with its own least-privilege identity through OIDC; standards built into modules and enforced by Azure Policy; CI with fmt, validate, tflint, checkov and Infracost, plan on PR and apply on merge with approvals; and drift detection.
+
+**What would you improve in your project?**
+> Move CI to OIDC and a plan/apply split with a saved plan and approvals; restrict SSH through Bastion instead of an open port; switch the state backend to Entra auth with shared keys disabled and private network access; add tflint, checkov and drift detection; and run the app as a versioned container image from ACR instead of building it on the VM.
 
 ## Interview questions
 

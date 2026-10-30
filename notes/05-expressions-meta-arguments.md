@@ -290,6 +290,46 @@ One block per copy. The plan should show `has moved to` and no `-/+`.
 
 Rewrite your project's NSG with `dynamic` from a map in a variable. Create two VMs with `for_each`. Remove one from the map and make sure `plan` touches only that one. The hands-on exercise is in [`practice-05-expressions.md`](practice-05-expressions.md).
 
+## Terraform types for JavaScript developers
+
+| Terraform | JavaScript / TypeScript |
+|---|---|
+| `list(string)` | `string[]` |
+| `set(string)` | `Set<string>`, but sorted and without indexes |
+| `map(string)` | a plain object `Record<string, string>`: string keys, **one** value type, iterated in **sorted** key order |
+| `object({ a = string, b = number })` | a TypeScript interface: fixed fields, each with its own type |
+| `tuple([string, number])` | `[string, number]` |
+| `[for x in list : ...]` | `array.map(...)` |
+| `lookup(m, k, "def")` | `m[k] ?? "def"` (a plain `m[k]` on a missing key is an **error** in Terraform) |
+| `merge(a, b)` | `{ ...a, ...b }` |
+| `cond ? a : b` | the same |
+
+## Interview answers
+
+**What are meta-arguments?**
+> Arguments built into Terraform that work on any resource regardless of provider: `count`, `for_each`, `depends_on`, `lifecycle` and `provider`. They control how Terraform creates and manages the resource rather than its cloud configuration, so they're never sent to Azure. Modules accept `count`, `for_each`, `depends_on` and `providers`.
+
+**`count` vs `for_each`?**
+> With `count`, a copy's address is its position, so removing an item from the middle of a list shifts every later item and recreates them. With `for_each` over a map or set, the address is the key, so only the removed key is affected. I use `count` for "0 or 1" or truly identical copies, and `for_each` for everything else. Switching between them changes every address, so it needs `moved` blocks.
+
+**Why does `for_each` need a set or a map?**
+> Each key becomes part of a copy's address, so keys must be unique. A list can contain duplicates and has positions, so it's converted with `toset()`, which removes duplicates. Keys must also be known at plan time, so they can't come from attributes computed during apply.
+
+**How do you refer to all copies of a `for_each` resource?**
+> A `for_each` resource is a map, so the splat `[*]` doesn't work on it directly. I use a `for` expression, `{ for k, r in azurerm_x.y : k => r.id }`, which keeps the keys, or `values(azurerm_x.y)[*].id` for a plain list.
+
+**`dynamic` vs `for_each` on a resource?**
+> `for_each` on a resource creates several resources. A `dynamic` block creates several nested blocks inside one resource, like NSG rules from a map, with the current item named after the block (`security_rule.key`, `.value`). Moving existing blocks into `dynamic` must produce `No changes`.
+
+**`validation` vs `precondition`?**
+> Both stop at `plan`, before anything reaches Azure. A `validation` belongs to a variable and checks its value for every use. A `precondition` belongs to a resource, can use other variables, resources and data sources, and expresses a rule about that specific resource, like "this VM must be B-series". A `check` block only warns.
+
+**Does `prevent_destroy` fully protect a resource?**
+> No. It makes `plan` fail if the resource would be destroyed, but only while the block is in the code: deleting the whole resource block deletes the protection too, and it doesn't stop deletion from the Portal. Real protection is an Azure resource lock (`CanNotDelete`); using both catches code mistakes early and everything else in Azure.
+
+**Conditional expressions and `lookup`?**
+> `cond ? a : b` picks a value, both sides of the same type; combined with `count = cond ? 1 : 0` it creates a resource conditionally, and `null` omits an argument. With more than two options, a map with `lookup(map, key, default)` is clearer than nested conditionals.
+
 ## Interview questions
 
 - `count` vs `for_each`: what's the difference, and when to use which?

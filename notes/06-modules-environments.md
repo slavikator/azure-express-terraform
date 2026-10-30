@@ -266,6 +266,20 @@ terraform state list | grep module.network
 
 Move your project's network into `modules/network` and the VM into `modules/vm`. Move the existing resources with `moved` blocks so that `plan` shows no `destroy`. Bring up dev and prod with separate states. The hands-on exercise is in [`practice-06-modules.md`](practice-06-modules.md).
 
+## Interview answers
+
+**Explain a git module source.**
+> `git::https://github.com/org/repo.git//network?ref=v1.2.0`: `git::` forces the git downloader, then the repository URL, then `//network` is the folder inside the repository, and `?ref=` pins a tag, branch or commit. A tag is the usual choice, a commit SHA is safest because it can't move, and a branch is risky because every `init` may get different code. After changing a source or ref, run `terraform init`.
+
+**What does `this` mean in `module.network.azurerm_virtual_network.this`?**
+> It's just a local name, not a keyword. By convention, a module names its single main resource of a type `this`, because the module's name already says what it is. Renaming a local name only changes the address, which a `moved` block handles without recreation.
+
+**Workspaces or separate directories?**
+> Workspaces give one codebase several states; with the `azurerm` backend, each is a separate blob next to the default one. But which environment you're in is invisible, all workspaces share the backend and credentials, and differences end up as `terraform.workspace` conditionals. Separate root directories per environment, calling shared versioned modules, make the target explicit, allow separate state keys, credentials and module versions, so I'd use them for long-lived dev and prod, and workspaces for temporary copies like a per-PR environment.
+
+**What is Terragrunt?**
+> A thin wrapper around Terraform for keeping many environments and states DRY: a root `terragrunt.hcl` defines the backend once and derives each state key from the folder path, and each environment folder holds only the module source and its inputs. It also models dependencies between states and runs many stacks in order. The trade-off is an extra tool, so for a few environments, plain Terraform with modules and separate roots is usually enough.
+
 ## Interview questions
 
 - What is a module, and why is it needed?
