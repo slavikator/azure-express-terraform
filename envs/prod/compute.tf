@@ -1,6 +1,6 @@
 # 3. The VM with its public IP, NIC and NIC ↔ NSG association
 module "vm" {
-  source              = "../../modules/vm"
+  source              = "git::https://github.com/slavikator/azure-express-terraform.git//modules/vm?ref=v1.0.0"
   name                = "prod"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name

@@ -6,3 +6,7 @@ output "subnet_main_id" {
 output "nsg_id" {
   value = azurerm_network_security_group.nsg.id
 }
+
+output "vnet_address_space" {
+  value = azurerm_virtual_network.main.address_space
+}
