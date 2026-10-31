@@ -11,12 +11,16 @@ on:
 
 jobs:
   terraform:
-    name: "Terraform Deploy"
+    name: "Terraform ${{ matrix.env }}"
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        env: [dev, prod]
 
     defaults:
       run:
-        working-directory: envs/dev
+        working-directory: envs/${{ matrix.env }}
 
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -45,5 +49,5 @@ jobs:
         run: terraform plan -no-color
 
       - name: Terraform Apply
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && matrix.env == 'dev'
         run: terraform apply -auto-approve
