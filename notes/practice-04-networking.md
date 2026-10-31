@@ -214,13 +214,21 @@ After this practice you should be able to, without looking:
 
 ## My answers
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
+1. 16 − 5 reserved = 11 usable addresses.
+2. Azure reserves `.0` (network), `.1` (default gateway), `.2` and `.3` (Azure DNS) and the last address (broadcast), so the first free one is `.4`.
+3. `~`, 1 resource: the inline security rule changes, so the NSG is updated in place, not recreated.
+4. Skipped (my IP is dynamic, so I reverted this step). (Answer: without the secret the variable has no value and CI `plan` fails or asks for input; Terraform only reads environment variables named `TF_VAR_<name>`.)
+5. `1 to add` (the `mgmt` subnet). `cidrsubnet(...)` returns the same `10.0.1.0/24` that was written literally before, so `main` doesn't change.
+6. `name` can't be changed in place, so `plan` shows `-/+`, and the delete fails because the VM's NIC is still in the subnet. **Correction:** I guessed "it can't change without stopping the VM"; the real reason is replacement of a subnet that's in use.
+7. `Initiated`, ping failed: only one side of the peering existed.
+8. `Connected`, ping works. Peering is two one-way links; each VNet must have its own peering to the other.
+9. Next hop `VNetPeering`. Peering isn't transitive, so a third VNet peered only with `vnet-peer` is unreachable. Real networks use hub-and-spoke with a firewall/NVA and route tables, or Virtual WAN.
+10. Inbound: the subnet NSG is checked first, then the NIC NSG; a packet passes only if both allow it (outbound: NIC first, then subnet).
+
+## Summary
+
+- CIDR math: `/n` → 2^(32−n) addresses, minus 5 reserved in Azure; `cidrsubnet` calculates subnets from the VNet.
+- NSGs: rules by priority, subnet + NIC both must allow; effective rules and routes prove what really applies.
+- Restricting by IP is fragile with a dynamic IP; Bastion or VPN are the real-world answers.
+- Some attributes force replacement (`name`), and replacing something in use fails.
+- Peering: two resources, `Initiated` → `Connected`, non-transitive.

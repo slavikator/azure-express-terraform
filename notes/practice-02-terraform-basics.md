@@ -189,17 +189,26 @@ After the practice you should be able to explain, without looking:
 
 ## My answers
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-11.
-12.
-13.
-14.
+1. 9 resources: RG, VNet, subnet, public IP, NSG, NIC, NIC ↔ NSG association, subnet ↔ NSG association, VM. All of them appear in `terraform state list`.
+2. `azurerm` 3.117.1. `h1:` is the hash of the unpacked provider for the platform I ran `init` on. `zh:` lines are the hashes of the zip packages for every platform, as published by the registry. **Correction:** `zh:` covers all platforms, not only Linux.
+3. Without the lock file CI picks the newest 3.x at that moment, which can differ from the version I tested with and break the run or change the plan.
+4. `No changes`: the variable defaults are the same values that were hard-coded before, so the configuration didn't really change.
+5. `Only swedencentral or northeurope allowed!`, because `"mars"` fails the `validation` rule. Terraform stopped before calling Azure: variables are validated before any resource is planned.
+6. `swedencentral` (the first time I misread it). `-var` on the command line has higher priority than a `TF_VAR_` environment variable.
+7. A resource group's location can't be changed in place, so the RG must be deleted in one region and created in the other. Everything inside the RG is destroyed and recreated with it.
+8. The subnet and the two association resources. A subnet is a part of the VNet, and an association is only a link between two resources, not a standalone Azure resource with its own metadata.
+9. 6 resources with `~`. Tags are metadata, so Azure updates them in place. **Correction:** I first thought tags need replacement; they don't.
+10. A `resource` is owned and managed by Terraform (create/change/delete). A `data` source only reads existing values and creates nothing in Azure.
+11. Locally: whoever is logged in with `az login`, i.e. my user. In CI: the service principal from `ARM_CLIENT_ID`. The subscription and tenant are the same; only the identity differs.
+12. RG → VNet → subnet → NIC → VM, and RG → public IP → NIC → VM. The NIC is the point where the network and the public IP meet.
+13. Skipped. (Answer: resources that don't reference each other, e.g. the VNet, the public IP and the NSG, are created in parallel once the RG exists.)
+14. `No changes`: CI uses the same code, the same remote state, and defaults equal to what's already applied.
+
+## Summary
+
+- Lock file pins the exact provider version; commit it so CI and teammates get the same one.
+- Variables: `type`, `default`, `validation`; priority is `-var` > `*.tfvars` > `TF_VAR_*` > default.
+- Plan markers: `~` in place, `-/+` replace (immutable attribute such as RG location), `+`/`-` create/destroy.
+- `locals` for shared tags; not every resource supports tags.
+- `data` reads, `resource` owns; `output` exposes values.
+- Order comes from references between resources (the dependency graph); independent resources run in parallel.

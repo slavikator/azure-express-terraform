@@ -272,15 +272,24 @@ After this practice you should be able to, without looking:
 
 ## My answers
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-11.
-12.
+1. Not written down (done in practice: RG and `data "azurerm_client_config"` stay in the root, network resources go to `modules/network`, PIP/NIC/association/VM go to `modules/vm`).
+2. Not written down (inputs: see `modules/*/variables.tf`).
+3. Not written down. (Answer: modules inherit the provider configuration from the root module; only the root configures providers.)
+4. Not written down. (Answer: `envs/dev` uses the same backend key, so it reads the existing state; a new key would mean an empty state and `plan` would create everything again.)
+5. Not written down. (Answer: without `moved`, destroy + create for every resource; a different name would force replacement even with `moved`.)
+6. Not written down. (Answer: `No changes` proves the refactor didn't touch infrastructure; creating nine resources would mean CI points to the wrong state.)
+7. Dev shows `No changes`, prod shows `10 to add`: prod has its own backend key, so a separate, empty state; dev's state isn't touched.
+8. Different: backend key, RG name, network/VM names, address space. Everything else is duplicated. In a bigger project: Terragrunt (or shared modules with only a thin root per environment).
+9. Dev sees the new output, prod doesn't (`Unsupported attribute`). Dev uses the local path (current files); prod downloaded the module at `v1.0.0` into `.terraform/modules/` and that copy is frozen.
+10. The repo is public, so CI needs nothing. For a private repo: a token for git (`url.insteadOf` rewrite), a deploy key with an SSH source, or a GitHub App token.
+11. With a tag the tagged version is always downloaded, so local changes don't break prod; a change reaches prod only when the `ref` is bumped in a reviewed commit. A SHA is even safer: a tag can be moved to another commit (`git tag -f` + force push), a SHA can't.
+12. Workspaces: one directory and backend, one state per workspace (`<key>env:<name>`), differences through `terraform.workspace`. Risks: forgetting which workspace is selected and applying to the wrong environment; no independent module versions per environment (`source` can't be a variable); shared backend and credentials. Good for short-lived identical copies, not for dev/prod.
+
+## Summary
+
+- Split the root into `modules/network` and `modules/vm` with inputs/outputs; a module can't see the root's variables or resources.
+- Moved existing resources into modules with `moved` blocks: `No changes`.
+- Separate environment directories `envs/dev` and `envs/prod` with separate backend keys; CI runs both with a matrix.
+- Modules pin the provider range (`>= 3.0, < 4.0`), roots pin with `~>` + lock file.
+- Versioned the modules with git tag `v1.0.0`; prod uses `?ref=v1.0.0`, dev the local path, which gives a controlled rollout.
+- Workspaces vs directories: directories win for real environments.

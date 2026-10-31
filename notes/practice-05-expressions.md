@@ -241,15 +241,23 @@ After this practice you should be able to, without looking:
 
 ## My answers
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-11.
-12.
+1. `[for ...]` gives a list, `{for ... : k => v}` gives a map; the brackets decide.
+2. It removed the duplicate. `for_each` needs unique keys, so `toset` makes a list usable with it.
+3. Removing `a` shifts the indexes: `[1]` becomes `[0]`, `[2]` becomes `[1]`. So `nsg-demo-b` and `nsg-demo-c` would be replaced under new names and the last index destroyed, instead of deleting just one NSG.
+4. The `moved` blocks map every old index to its new key, so the state is renamed instead of recreated. Without them `plan` would destroy and create all three.
+5. 1 to destroy (`a`); `b` and `c` kept their GUIDs.
+6. `No changes`: it's only a refactor of the code, the result in Azure is the same.
+7. The NSG changes with `~`, HTTPS is added in place. One new map entry instead of a whole 14-line rule block.
+8. A new NIC in the second subnet, so the addresses start with `10.0.2.`; `.1`–`.3` are reserved, so the first is `.4`. `[*]` works on lists, and a resource with `for_each` is a map, so you need a `for` expression. **Correction:** I first answered "unknown before apply" for the last part.
+9. Removing `api` destroys only `vm-lab-api` and `nic-lab-api`; `web` is untouched because instances are keyed by name, not by position.
+10. `Error: Instance cannot be destroyed`. If the whole RG block is deleted, `prevent_destroy` goes with it and protects nothing. An Azure resource lock (`CanNotDelete`) really protects the RG.
+11. `plan` with a B-size: no changes; with `Standard_D2s_v5`: `Resource precondition failed` with my message. A `validation` can only check the variable itself, a `precondition` sits on the resource and can combine values. **Correction:** both run during `plan`, before anything is created.
+12. Not answered yet.
+
+## Summary
+
+- `count` addresses by position (fragile), `for_each` by key (stable); migrate with `moved`.
+- `for` expressions build lists or maps; `toset` removes duplicates; `lookup`, `merge`, `cidrsubnet` in the console.
+- `dynamic` blocks generate nested blocks; a refactor must end in `No changes`.
+- `lifecycle`: `prevent_destroy` (only while the block exists), `ignore_changes`, `precondition`.
+- Trial quotas (cores, public IPs per region) shape what you can deploy.

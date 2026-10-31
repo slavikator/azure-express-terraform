@@ -225,19 +225,28 @@ Table:
 
 | # | Code | State | Azure | Where you meet it | What `plan` shows |
 |---|---|---|---|---|---|
-| 1 | ❌ | ❌ | ✅ | Scenario 1, after creating `nsg-manual` |   |
-| 2 | ✅ | ❌ | ✅ | Scenario 1, after writing the code; maybe Scenario 4 |   |
-| 3 | ✅ | ✅ | ❌ | Scenario 2 |   |
-| 4 | ✅ | ✅ | ✅, but a different value | Scenario 3 |   |
-| 5 | ❌ | ✅ | ✅ | Scenario 1, cleanup |   |
+| 1 | ❌ | ❌ | ✅ | Scenario 1, after creating `nsg-manual` | Nothing: Terraform doesn't know the resource exists |
+| 2 | ✅ | ❌ | ✅ | Scenario 1, after writing the code; maybe Scenario 4 | `+` create, and `apply` fails with "already exists" → `import` |
+| 3 | ✅ | ✅ | ❌ | Scenario 2 | `+` create again (refresh finds it gone) |
+| 4 | ✅ | ✅ | ✅, but a different value | Scenario 3 | `~` change Azure back to the code's value |
+| 5 | ❌ | ✅ | ✅ | Scenario 1, cleanup | `-` destroy |
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
+1. If the plan already has changes, they mix with the scenario's changes and I can't tell what the scenario caused.
+2. `No changes`: the resource is only in Azure (row 1), and Terraform only looks at what's in code and state.
+3. `1 to import, 0 to add, 0 to change, 0 to destroy`, exactly as expected.
+4. I removed the resource from the code, `plan` showed it would be destroyed, and `apply` deleted it from Azure and the state. With `terraform state rm` it would leave the state but stay in Azure, and while the code is still there `plan` would want to create it again.
+5. `-refresh-only` showed the association was deleted (and the subnet updated in place). The normal `plan` wanted to create the association again, because it's still in the code.
+6. Remove it from the code; otherwise Terraform recreates it on every apply.
+7. `~` on the NSG: the SSH rule is an inline `security_rule` block, an attribute of the NSG, so the NSG is updated in place. **Correction:** I said the rule gets recreated; it's an in-place update of the NSG.
+8. I ran `apply` to put Azure back to the code's value. `apply -refresh-only` would do the opposite: accept Azure's value into the state, while the code still says something else.
+9. No lock. The VM wasn't in the state but existed in Azure (row 2). **Correction:** I first assumed "not in state = not in Azure"; that's exactly the trap of an interrupted apply.
+10. Wrote an `import` block, `plan` showed 1 to import, `apply`, then deleted `import.tf`; `plan` and `git status` were clean. **Correction:** a single Ctrl+C asks Terraform to stop gracefully (finish in-flight calls, save state, release the lock); the second Ctrl+C kills it, which is what leaves orphans and a stuck lock.
+
+## Summary
+
+- Three sources of truth: code, state, Azure; `plan` compares all three (refresh first).
+- Remote backend in a storage account: shared state, locking through a blob lease, versioning for recovery.
+- The state contains secrets in plain text; protect access to it.
+- Created by hand → `import` block; rename → `moved`; stop managing without deleting → `removed` with `destroy = false`.
+- Drift: `apply` restores the code; `-refresh-only` accepts Azure's values; `-replace` forces recreation.
+- Stuck lock → `force-unlock` only when sure nobody else is running.
