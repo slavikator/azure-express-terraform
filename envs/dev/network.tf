@@ -7,7 +7,7 @@ resource "azurerm_resource_group" "rg" {
 
 # 2. Network: VNet, subnets, NSG and NSG ↔ subnet association
 module "network" {
-  source              = "./modules/network"
+  source              = "../../modules/network"
   name                = "demo"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
