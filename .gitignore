@@ -10,3 +10,5 @@ id_rsa*
 *.pub
 
 graph.dot
+
+modules/**/.terraform.lock.hcl
