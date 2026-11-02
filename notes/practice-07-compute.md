@@ -76,7 +76,7 @@ EOF
 **Predict** how many resources `plan` will add, then `apply`. Then call the Load Balancer several times:
 
 ```
-LB_IP=$(az network public-ip show -g rg-lab-compute-swe -n <your LB IP name> --query ipAddress -o tsv)
+LB_IP=$(az network public-ip show -g rg-lab-compute-swe -n pip-lab --query ipAddress -o tsv)
 for i in $(seq 1 10); do curl -s http://$LB_IP; done
 ```
 
@@ -91,8 +91,8 @@ for i in $(seq 1 10); do curl -s http://$LB_IP; done
 Stop the web server on one instance, without SSH, through the VM agent:
 
 ```
-az vmss list-instances -g rg-lab-compute-swe -n <your vmss name> --query "[].{id:instanceId, name:osProfile.computerName}" -o table
-az vmss run-command invoke -g rg-lab-compute-swe -n <your vmss name> --instance-id <id> --command-id RunShellScript --scripts "pkill -f http.server"
+az vmss list-instances -g rg-lab-compute-swe -n vmss-lab --query "[].{instance:instanceId, name:osProfile.computerName}" -o table
+az vmss run-command invoke -g rg-lab-compute-swe -n vmss-lab --instance-id 0 --command-id RunShellScript --scripts "pkill -f http.server"
 ```
 
 Wait about 30 seconds, then repeat the `curl` loop.
@@ -115,13 +115,13 @@ Change the scale set to start with **one** instance, and add an autoscale settin
 **Predict** the plan, apply, then generate CPU load on the single instance (2 vCPUs, so two busy loops):
 
 ```
-az vmss run-command invoke -g rg-lab-compute-swe -n <your vmss name> --instance-id <id> --command-id RunShellScript --scripts "nohup sh -c 'yes > /dev/null' & nohup sh -c 'yes > /dev/null' &"
+az vmss run-command invoke -g rg-lab-compute-swe -n vmss-lab --instance-id 0 --command-id RunShellScript --scripts "nohup sh -c 'yes > /dev/null' & nohup sh -c 'yes > /dev/null' &"
 ```
 
 Watch the instance count for 10–15 minutes:
 
 ```
-az vmss list-instances -g rg-lab-compute-swe -n <your vmss name> -o table
+az vmss list-instances -g rg-lab-compute-swe -n vmss-lab -o table
 ```
 
 Then stop the load (`pkill yes`) and watch it scale in.
@@ -189,10 +189,10 @@ In the [Azure Pricing Calculator](https://azure.microsoft.com/pricing/calculator
 
 Only if `az containerapp env list -o table` shows **no** environment: a trial allows one, and `swedencentral` sometimes lacks capacity (try `northeurope`).
 
-Create a `azurerm_container_app_environment` and a `azurerm_container_app` running `nginxdemos/hello:latest` with external ingress on port 80, `min_replicas = 0`, `max_replicas = 2`. Open it, then wait about 10 minutes without traffic and check:
+Create an `azurerm_container_app_environment` and an `azurerm_container_app` named `ca-lab`, running `nginxdemos/hello:latest` with external ingress on port 80, `min_replicas = 0`, `max_replicas = 2`. Open it, then wait about 10 minutes without traffic and check:
 
 ```
-az containerapp replica list -g rg-lab-compute-swe -n <your app name> -o table
+az containerapp replica list -g rg-lab-compute-swe -n ca-lab -o table
 ```
 
 > ❓ **12.** How many replicas were running after the idle period? What did you notice on the first request afterwards, and why?
