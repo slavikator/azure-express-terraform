@@ -225,6 +225,71 @@ A named target (`dev`, `production`) that a job declares with `environment:`.
 - **OIDC:** the subject becomes `repo:<owner>/<repo>:environment:production`, so the federated credential trusts only jobs that passed the protections.
 - ⚠️ In **private** repositories, protection rules and environment secrets need a paid GitHub plan; public repositories get them for free.
 
+### 15. GitHub Actions: how a workflow is built
+
+Mapped onto this repo's `.github/workflows/deploy.yml`.
+
+**Structure: workflow → jobs → steps**
+
+```
+workflow  (one .yml file in .github/workflows/)
+└── jobs           run in PARALLEL by default, each on its own fresh VM
+    └── steps      run IN ORDER on that VM, sharing its files
+```
+
+- **Workflow:** one file. Every `.yml` in the folder is a separate workflow.
+- **Job:** gets a brand-new runner VM (`runs-on: ubuntu-latest`) with nothing from earlier runs, so every job starts with `actions/checkout`.
+- **Step:** either `uses:` (a ready-made action, e.g. `actions/checkout@v4`) or `run:` (a shell command).
+- A **matrix** (`strategy.matrix.env: [dev, prod]`) turns one job definition into several parallel jobs.
+
+**Triggers (`on:`)**
+
+| Trigger | When |
+|---|---|
+| `push` | every push/merge to the listed branches |
+| `pull_request` | every PR to the listed branches, and every new commit on it |
+| `workflow_dispatch` | the "Run workflow" button / `gh workflow run` |
+| `schedule` | cron, e.g. nightly drift detection |
+| `workflow_call` | another workflow calls this one (reusable workflow) |
+
+`paths:` filters run a workflow only when certain files changed.
+
+**Expressions and contexts: `${{ ... }}`**
+
+Evaluated **by GitHub before the step runs**, not by the shell. Data comes from contexts: `secrets.*` (masked as `***` in logs), `vars.*` (non-secret settings), `matrix.*`, `env.*`, `github.*` (`event_name`, `ref`, `sha`). `if:` takes an expression without the braces: `if: github.event_name == 'workflow_dispatch' && matrix.env == 'dev'`.
+
+**`env:` and credentials**
+
+A job-level `env:` is exported to every step. The azurerm provider reads `ARM_*` automatically; Terraform reads `TF_VAR_<name>` as a variable.
+
+**Building blocks for a real pipeline**
+
+- `needs:` chains jobs (apply only after plan succeeds).
+- Artifacts (`actions/upload-artifact` / `download-artifact`) pass files between jobs, e.g. the plan file from the plan job to the apply job.
+- `environment: production` links a job to a GitHub environment: required reviewers (manual approval) and environment-specific secrets.
+- `permissions:` limits the `GITHUB_TOKEN` (minimum: `contents: read`); OIDC needs `id-token: write`.
+- `concurrency:` stops two runs from applying to the same environment at once.
+- Reusable workflows and composite actions are the DRY tools for workflows, like modules for Terraform.
+
+**Security basics**
+
+- Pin actions: `@v4` is a movable tag; a commit SHA can't change (the same trade-off as module tags vs SHAs).
+- Secrets aren't passed to workflows triggered by PRs from forks, which matters for a public repo.
+- Avoid `pull_request_target` unless you understand it: it runs with secrets on untrusted code.
+- Never `echo` secrets; masking catches exact matches only.
+
+**Weak spots in this repo's workflow (to fix in practice 09)**
+
+1. `apply` re-plans instead of applying the reviewed plan (no `-out` file).
+2. No approval gate; `-auto-approve` on `workflow_dispatch`.
+3. A long-lived client secret instead of OIDC.
+4. CI uses Terraform 1.8.0, the laptop a newer 1.x; pin one version everywhere.
+5. Labs aren't planned in CI, only format-checked (fine for local experiments).
+
+**Tools:** `actionlint` (YAML and expression errors before pushing); `gh run list`, `gh run watch`, `gh run view --log-failed`, `gh workflow run deploy.yml`.
+
+**Mental model:** every job is a fresh, empty VM, and `${{ }}` is filled in by GitHub before the shell sees it.
+
 ## Check yourself
 
 Rebuild your workflow: `plan` on PR with a comment, `apply` after merge with approval through the `production` environment, the plan as an artifact, `concurrency`, `tflint` and `checkov`. Add daily drift detection. The hands-on exercise is in [`practice-09-cicd.md`](practice-09-cicd.md).
