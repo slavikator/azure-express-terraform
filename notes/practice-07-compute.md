@@ -224,15 +224,25 @@ After this practice you should be able to, without looking:
 
 ## My answers
 
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-11.
-12.
+1. So the lab has its own, independent state. With dev's key, `plan` would compare the lab code with dev's state: everything dev owns would show as **to destroy**, one `apply` would wipe dev, and both folders would share one state lock.
+2. Yes, both hostnames answered. The only public address is the LB's frontend IP. The rule (TCP 80 → pool, port 80) and the probe pick a healthy instance from the pool (5-tuple hash), and the LB forwards the packet to that instance's private IP. The instances are in the pool through `load_balancer_backend_address_pool_ids` on the VMSS. (Explained to me; my own answer was "don't know".)
+3. Azure Load Balancer isn't a proxy: it passes packets through, so the instance sees my laptop's IP and the NIC's NSG judges the packet as "Internet → port 80". Without the HTTP rule, `DenyAllInBound` drops it. The probe comes from `168.63.129.16` and is let in by the default rule `AllowAzureLoadBalancerInBound`. (Explained to me.)
+4. With instance 0's server killed, all answers came from instance 1: the probe got no 200, marked instance 0 unhealthy, and the LB sends new connections only to healthy instances. A probe on a port nothing listens on marks **every** instance unhealthy, so the LB drops all new connections. **Correction:** I said the app on port 80 would stop; it keeps running. The probe only controls routing, so the site is down while the app is up.
+5. Roughly 10+ minutes. The delay is made of: metric delay (~2–3 min), the 5-minute `time_window` average climbing over the threshold, the cooldown after the previous scale action, provisioning and boot (~2–3 min), cloud-init and the probe turning healthy (~1 min). Autoscale reacts in minutes; spikes need headroom or scheduled scaling.
+6. The autoscaler changes the instance count in Azure. Without `ignore_changes`, the next `plan` treats that as drift (`~ instances = 2 -> 1`) and `apply` would undo the autoscaler, possibly in the middle of a spike. With it, Terraform sets the count once and leaves it to the autoscaler. Rule: ignore attributes that something outside Terraform legitimately manages.
+7. To prevent flapping. Adding an instance spreads the same load over more instances and lowers the average CPU (1 → 2 instances: about half). With close thresholds (e.g. 50/45) a scale-out immediately triggers a scale-in and it cycles forever. The gap must be wider than the drop one scaling step causes. Azure also has built-in flapping protection.
+8. VMSS path: VNet, subnet, NSG, public IP, LB + pool + probe + rule, the VMSS (image, disk, SSH key, cloud-init), autoscale: about 11 resources. App Service: 2 (plan + web app), with HTTPS, a load balancer, OS patching and scaling included. I manage the image/code, settings, scaling choices and access; Microsoft manages the hardware, VMs, OS, container runtime, load balancer and TLS. Few required arguments = the platform does more.
+9. `latest` is a mutable tag: a restart or scale-out can pull a different image with no change in code, instances can run different versions, there's no clear rollback and no audit trail. Use a specific version tag, or a digest (`@sha256:...`), ideally own images in ACR tagged with the commit SHA. **Correction:** I said "latest can be unstable"; the real problem is that it can change.
+10. Autoscale **acts** automatically within its limits; a metric alert **tells a human**. Needed when autoscale is at its maximum, when scaling is the wrong fix (a bug burning CPU), or when scaling fails (quota). Autoscale handles it; the alert tells you when it can't.
+11. Skipped the calculator. Rough ballpark (not verified): VM ~$35–45, VMSS + LB ~$80–90, App Service B1 ~$13, Container Apps Consumption ~$0 for a small app (free grant). Choice for the Express app: Container Apps (already a container, scale to zero, cheapest at low traffic); App Service B1 as the simple, always-warm alternative. VM/VMSS only when OS-level control is needed.
+12. Skipped (Step 7, Container Apps, not done yet).
+
+## Summary
+
+- Built a VMSS (2 × `Standard_B2ls_v2`, no public IPs) behind a Standard Load Balancer: frontend IP, backend pool, HTTP health probe, rule. Load spread by 5-tuple hash, not round-robin.
+- Health probe: from `168.63.129.16`, per instance, 200 = healthy; unhealthy instances get no new traffic but keep running. A wrong probe takes the whole site down while the app runs.
+- An L4 LB passes packets through, so NSGs still need the app's port open.
+- Autoscale: CPU > 60% → +1, < 20% → −1, min 1 / max 2; reacts in minutes; `ignore_changes = [instances]`; default scale-in removes the highest instance ID; IDs are never reused and overprovisioning skips IDs.
+- App Service B1 ran `nginxdemos/hello` with 2 resources: PaaS removes OS, LB, TLS and patching work. Pin image versions instead of `latest`.
+- Monitoring: Log Analytics + diagnostic setting (`AppServiceHTTPLogs`, queried with KQL), action group (email from a variable, not in the public repo), metric alert. Saw Always On pings in the logs.
+- Practical lessons: `$(...)` and `-chdir` depend on the current folder; `az -o table` hides columns named `id`; a typo in a resource-type prefix gives "Missing required provider".
