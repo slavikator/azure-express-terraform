@@ -39,6 +39,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
   vm_agent_platform_updates_enabled = false
   tags                              = var.tags
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   custom_data = base64encode(<<-EOF
               #!/bin/bash
               # 1. Install Docker
