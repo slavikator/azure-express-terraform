@@ -57,6 +57,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
 
   plan:
     runs-on: ubuntu-24.04
