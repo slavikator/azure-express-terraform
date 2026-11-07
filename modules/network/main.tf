@@ -14,6 +14,7 @@ resource "azurerm_subnet" "main" {
 }
 
 resource "azurerm_subnet" "mgmt" {
+  #checkov:skip=CKV2_AZURE_31:Management subnet has no workloads yet
   name                 = "snet-mgmt"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.main.name
