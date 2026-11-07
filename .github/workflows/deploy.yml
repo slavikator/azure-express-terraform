@@ -43,9 +43,30 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.65.0
+
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          skip_path: labs
+
   plan:
     runs-on: ubuntu-24.04
-    needs: checks
+    needs: [checks, lint]
     permissions:
       id-token: write
       contents: read

@@ -10,6 +10,7 @@ resource "azurerm_public_ip" "pip" {
 
 # Network Interface (network card)
 resource "azurerm_network_interface" "nic" {
+  #checkov:skip=CKV_AZURE_119:Public IP needed for SSH in the learning project; Bastion later
   name                = "nic-${var.name}-vm"
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -31,6 +32,7 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 
 # Ubuntu virtual machine
 resource "azurerm_linux_virtual_machine" "vm" {
+  #checkov:skip=CKV_AZURE_50:Extensions allowed for learning (e.g. Entra SSH login)
   name                              = "vm-${var.name}-node"
   resource_group_name               = var.resource_group_name
   location                          = var.location

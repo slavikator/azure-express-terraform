@@ -1,5 +1,6 @@
 # 3. The VM with its public IP, NIC and NIC ↔ NSG association
 module "vm" {
+  #checkov:skip=CKV_TF_1:Pinned to own tag v1.0.0 in own repo; SHA pinning later
   source              = "git::https://github.com/slavikator/azure-express-terraform.git//modules/vm?ref=v1.0.0"
   name                = "prod"
   location            = azurerm_resource_group.rg.location
