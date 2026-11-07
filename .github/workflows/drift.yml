@@ -29,5 +29,6 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.4
+          terraform_wrapper: false
       - run: terraform init -input=false
       - run: terraform plan -refresh-only -detailed-exitcode -input=false -lock=false -no-color
