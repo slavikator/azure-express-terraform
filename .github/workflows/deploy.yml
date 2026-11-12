@@ -42,25 +42,32 @@ jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.16.4
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
-      - uses: terraform-linters/setup-tflint@v6
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: v0.65.0
 
-      - run: tflint --init
+      - name: TFLint Init
+        run: tflint --init
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
-      - uses: bridgecrewio/checkov-action@v12
+      - name: TFLint
+        run: tflint --recursive --config "$GITHUB_WORKSPACE/.tflint.hcl"
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
         with:
           directory: .
           framework: terraform
@@ -121,7 +128,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Upload
+      - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ matrix.env }}
@@ -170,7 +177,7 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Download
+      - name: Download Plan
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ matrix.env }}
