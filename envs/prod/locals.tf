@@ -2,7 +2,7 @@
 locals {
   tags = {
     project = "azure-demo"
-    env     = "dev"
+    env     = "prod"
     owner   = "slavikator"
   }
 }

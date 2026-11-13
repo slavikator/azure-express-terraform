@@ -98,11 +98,3 @@ terraform -chdir=envs/dev destroy
 ```
 
 Environments are destroyed between sessions to keep costs near zero; only the state storage account stays.
-
-## What I'd do next
-
-- Remove the VM's public IP and reach it through Azure Bastion or JIT access; switch SSH to Entra ID login.
-- Apply prod from CI too, through its own GitHub environment with stricter reviewers and its own federated credential; separate identities for plan (read-only) and apply.
-- Infracost in the PR, so the monthly cost change is reviewed next to the plan.
-- Notifications when apply fails or drift is found.
-- Pin GitHub Actions and module sources to commit SHAs.
