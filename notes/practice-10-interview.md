@@ -149,7 +149,7 @@ After this practice you should be able to:
 
 ## My answers
 
-1.
+1. **Step 1 done** (README.md merged in PRs #9 and #10; "What I'd do next" dropped on purpose). Skipped the read-back exercise; went through every README section in a review instead: remote state in a separate bootstrapped RG with one key per root, versioning, soft delete and blob lease locking, validation/precondition vs Azure Policy, OIDC with three federated credentials, the ruleset (`~DEFAULT_BRANCH`, a GitHub setting, not code) and the environment gate, job-level permissions replacing top-level ones, `-detailed-exitcode`, tflint plugins via `.tflint.hcl`, the SSH public-key flow, and the prerequisites (data-plane role for the state). Fixed along the way: prod tags had `env = "dev"`.
 2.
 3.
 4.
