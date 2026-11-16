@@ -48,7 +48,7 @@ Include:
 
 ## Step 2. Your stories
 
-Your notes have seven stories (STAR format): the CI hang on `init`, the state/Azure mismatch, the provider without an upper bound, CI recreating the VM, the double Ctrl+C, the quotas and partial applies, and the `count` trap.
+Your notes have six stories (STAR format): the CI hang on `init`, the provider without an upper bound, CI recreating the VM, the double Ctrl+C, the quotas and partial applies, and the `count` trap.
 
 For each:
 

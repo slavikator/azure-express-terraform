@@ -94,36 +94,30 @@ What you must cover:
 - **Action:** a CI runner starts fresh, with only what's in git: no `.terraform/` cache and no values in the code, so init waited for input nobody could give. I wrote the backend values explicitly into `providers.tf`, added `-input=false` to `init` and `apply`, and removed an unused variable without a default that would have made `apply` hang next.
 - **Result:** init passes, and any missing input now fails fast with an error instead of hanging. The lesson: local success proves nothing about CI; the runner has none of your local state, so CI must be fully non-interactive.
 
-### Story 2. State diverged from Azure
-- **Situation:** `apply` failed with `ManagedEnvironmentNoAvailableCapacityInRegion`, but Azure later created the Container Apps environment anyway.
-- **Task:** bring the state back in line with reality.
-- **Action:** I found the resource with `az` and tried `import`, but the service's own `provisioningState` turned out to be `Failed`, even though the general resource status showed `Succeeded`. I removed it from the state (`state rm`), deleted it, and moved the environment to another region.
-- **Result:** the infrastructure came up. The lessons: check the state of the specific service, not the general resource status; know the subscription's limits (a trial allows only one environment).
-
-### Story 3. A provider without an upper version bound
+### Story 2. A provider without an upper version bound
 - **Situation:** `terraform destroy` failed twice with `polling support ... was not implemented`.
 - **Task:** cleanly remove the infrastructure.
 - **Action:** I found that the constraint `>= 3.118.0` had pulled in azurerm 5.8.0, which had a bug. Resources were deleted in Azure, but not from the state. I checked the real state with `az` and ran `destroy` again: refresh saw that the resources were already gone.
 - **Result:** the infrastructure was removed. I pinned versions with `~>` and added the lock file to git.
 
-### Story 4. CI brought the infrastructure back after `destroy`
+### Story 3. CI brought the infrastructure back after `destroy`
 - **Situation:** after a manual `destroy`, pushing a commit with notes created the VM again.
 - **Action:** through the activity log I found that the resources had been created by the CI service principal. The cause: `apply` on every push to main.
 - **Result:** I left only `plan` on push, and I run `apply` manually. The lesson: a pipeline with auto-apply conflicts with manual changes; you need explicit approval.
 
-### Story 5. A double Ctrl+C left a VM outside the state
+### Story 4. A double Ctrl+C left a VM outside the state
 - **Situation:** during `apply -replace` of a VM, the process was killed (simulating a laptop dying). The next `plan` wanted to create the VM again.
 - **Task:** recover without losing or duplicating anything.
 - **Action:** diagnosed with commands, not guesses: the state lock was free, `state list` didn't contain the VM, but `az vm show` showed it in Azure as `Succeeded`. Azure had finished creating it after Terraform was killed. Imported it with an `import` block, checked `plan` showed `1 to import, 0 to change`, then `No changes`.
 - **Result:** no duplicate VM, no data loss. Lessons: one Ctrl+C is a graceful stop that records results; check lock, state and Azure separately; "not in the state" doesn't mean "not in Azure".
 
-### Story 6. Trial quotas and partial applies
+### Story 5. Trial quotas and partial applies
 - **Situation:** an `apply` failed with `PublicIPCountLimitReached` (3 public IPs per region), and another with the regional vCPU quota (4 cores), while other resources in the same apply succeeded.
 - **Task:** understand what was created and finish the deployment.
 - **Action:** checked usage with `az network list-usages` and `az vm list-usage`; saw that Terraform had recorded exactly what succeeded (a partial apply, not a broken state). Redesigned the exercise to use resources without tight quotas, and re-ran `apply` once parallel deletions had released cores. Also learned that deallocated VMs still count toward the vCPU quota.
 - **Result:** completed without manual state edits. Lessons: check quotas before big changes; independent resources are created in parallel, so a create can race a delete; the state always reflects what actually happened.
 
-### Story 7. A `count` list nearly recreated resources
+### Story 6. A `count` list nearly recreated resources
 - **Situation:** removing the first item from a list used with `count` showed `2 to add, 3 to destroy` instead of deleting one resource.
 - **Action:** recognized that `count` addresses are positions, so every later item shifted. Migrated to `for_each` with three `moved` blocks (plan: only `has moved to`), then removed the item again: `1 to destroy`, and the remaining resources kept their IDs.
 - **Result:** a safe pattern for collections: `for_each` with stable keys, and `moved` blocks for migrations.
