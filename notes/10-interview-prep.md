@@ -157,6 +157,9 @@ Walk an interviewer through your project in 5 minutes: the architecture, why you
 **What would you improve in your project?**
 > Move CI to OIDC and a plan/apply split with a saved plan and approvals; restrict SSH through Bastion instead of an open port; switch the state backend to Entra auth with shared keys disabled and private network access; add tflint, checkov and drift detection; and run the app as a versioned container image from ACR instead of building it on the VM.
 
+**How does secretless (OIDC) login from GitHub Actions to Azure work?**
+> The job requests a short-lived OIDC token from GitHub and sends it with the app's client ID to Entra; Entra verifies GitHub's signature, matches issuer, subject and audience against the app's federated credential, and issues its own Azure token, and the job's actions are then limited by the service principal's RBAC roles.
+
 ## Interview questions
 
 - Tell me about the hardest infrastructure problem you've solved.
