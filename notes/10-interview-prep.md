@@ -89,10 +89,10 @@ What you must cover:
 ## My interview stories (STAR)
 
 ### Story 1. CI hung on `terraform init`
-- **Situation:** after a refactor, the GitHub Actions pipeline hung on the `terraform init` step.
-- **Task:** find the cause and make the pipeline reliable.
-- **Action:** I found that the `backend "azurerm"` block had become empty. Locally the parameters had been entered interactively and saved in `.terraform/`, but in CI Terraform waited for input. I wrote the backend configuration explicitly and added `-input=false` to all commands.
-- **Result:** init passes. If parameters are missing, the step fails right away with an error instead of hanging. The lesson: always use `-input=false` in CI.
+- **Situation:** the `backend "azurerm"` block held only a placeholder comment, no values; I meant to fill it in later and forgot. Locally it didn't matter: `terraform init` asked for the backend values interactively, I typed them, and Terraform cached them in `.terraform/` (gitignored).
+- **Task:** after I added a GitHub Actions pipeline, the job hung on `terraform init`; find out why and make the pipeline reliable.
+- **Action:** a CI runner starts fresh, with only what's in git: no `.terraform/` cache and no values in the code, so init waited for input nobody could give. I wrote the backend values explicitly into `providers.tf`, added `-input=false` to `init` and `apply`, and removed an unused variable without a default that would have made `apply` hang next.
+- **Result:** init passes, and any missing input now fails fast with an error instead of hanging. The lesson: local success proves nothing about CI; the runner has none of your local state, so CI must be fully non-interactive.
 
 ### Story 2. State diverged from Azure
 - **Situation:** `apply` failed with `ManagedEnvironmentNoAvailableCapacityInRegion`, but Azure later created the Container Apps environment anyway.
