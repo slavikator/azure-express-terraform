@@ -160,6 +160,54 @@ Walk an interviewer through your project in 5 minutes: the architecture, why you
 **How does secretless (OIDC) login from GitHub Actions to Azure work?**
 > The job requests a short-lived OIDC token from GitHub and sends it with the app's client ID to Entra; Entra verifies GitHub's signature, matches issuer, subject and audience against the app's federated credential, and issues its own Azure token, and the job's actions are then limited by the service principal's RBAC roles.
 
+**What is Infrastructure as Code?**
+> Infrastructure is defined declaratively in version-controlled code, reviewed through pull requests and applied by a pipeline, so environments are repeatable and auditable, and drift can be detected and corrected.
+
+**Where does your Terraform state live, and why there?**
+> State lives remotely in a dedicated, bootstrapped storage account outside the environments it describes, with one state file per environment, so environments are isolated and destroying one never touches its own state.
+
+**How is the state protected?**
+> The state blob has versioning and soft delete, so I can roll back a bad write or undelete it, and Terraform locks it with a blob lease so two runs can never write at once. Access is Entra ID only, with shared keys disabled.
+
+**What is HCP Terraform (Terraform Cloud), and why didn't you use it?**
+> HCP Terraform is managed Terraform: remote state and locking, workspaces, VCS-driven plan and apply, dynamic OIDC credentials, and policy as code with Sentinel or OPA. I built the same pieces myself with Azure Storage and GitHub Actions, which gives more control and lower cost; HCP trades that for less to maintain.
+
+**What triggers your pipeline, and what does each trigger do?**
+> PRs into main run checks and plan, a merge to main runs plan and a gated apply, and workflow_dispatch lets me rerun the pipeline by hand without applying.
+
+**Why are validate and lint separate jobs?**
+> Per-root checks like validate run in a matrix per environment; whole-repo scans like fmt, tflint and checkov run once in a parallel job, and plan waits for both.
+
+**Why does every job check out the code and install Terraform again?**
+> Every job runs on a fresh runner, so it checks out the commit under test and installs a pinned Terraform version; pinning matters because a saved plan can only be applied by the exact same version.
+
+**How do you limit what each CI job can do?**
+> Each job gets only the token scopes it needs: read-only by default, `pull-requests: write` only in the job that posts the plan comment, and `id-token: write` only where Azure login is needed. A job-level permissions block replaces the top-level one, so it can also grant less.
+
+**How does your drift detection work?**
+> A nightly refresh-only plan with `-detailed-exitcode` (0 no changes, 1 error, 2 changes) and `-lock=false` turns drift into a failing job without blocking real applies; the setup-terraform wrapper must be disabled, or it treats exit code 2 as success.
+
+**What does TFLint add to `terraform validate`?**
+> TFLint is a pluggable linter: `.tflint.hcl` pins the azurerm ruleset, `tflint --init` downloads it, and it catches Azure-specific mistakes like invalid VM sizes that `terraform validate` can't see.
+
+**How do you catch cost before it's spent?**
+> Infracost prices the Terraform plan in CI and comments the monthly cost diff on the PR, so cost is reviewed alongside the change, while budgets and anomaly alerts in Cost Management catch what actually gets spent.
+
+**What is Azure Front Door?**
+> Front Door is the global HTTP entry point: anycast at Microsoft's edge, TLS, WAF and caching close to the user, health-based failover between regions, and the origin locked so traffic can only arrive through Front Door.
+
+**What's the difference between layer 4 and layer 7 load balancing?**
+> Layer 4 balances connections by IP and port; layer 7 understands HTTP, so it can route by path, terminate TLS, cache, and run a WAF. Load Balancer is L4; Application Gateway and Front Door are L7.
+
+**What are deployment slots for?**
+> Deployment slots let you deploy to a warmed-up staging copy of the app, validate it, and swap it into production with no downtime; rollback is just swapping back. Sticky settings keep environment-specific config like connection strings with the slot.
+
+**How would you give SSH access without an open port 22?**
+> The VM has only a private IP and the NSG allows SSH only from AzureBastionSubnet. Users connect over TLS through Azure Bastion, authenticated with Entra ID and RBAC, ideally with Entra SSH login so there are no keys to manage. For cheaper setups, JIT access opens the port only for my IP and only for a limited time.
+
+**What is Azure Resource Graph used for?**
+> Azure Resource Graph is a KQL-queryable index of all resources across subscriptions. I use it for inventory and governance: untagged or orphaned resources, insecure settings, policy compliance, and recent changes, respecting RBAC and without touching the resources.
+
 ## Interview questions
 
 - Tell me about the hardest infrastructure problem you've solved.
