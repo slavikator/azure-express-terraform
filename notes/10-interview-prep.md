@@ -95,15 +95,13 @@ What you must cover:
 - **Result:** init passes, and any missing input now fails fast with an error instead of hanging. The lesson: local success proves nothing about CI; the runner has none of your local state, so CI must be fully non-interactive.
 
 ### Story 2. A provider without an upper version bound
-- **Situation:** `terraform destroy` failed twice with `polling support ... was not implemented`.
-- **Task:** cleanly remove the infrastructure.
-- **Action:** I found that the constraint `>= 3.118.0` had pulled in azurerm 5.8.0, which had a bug. Resources were deleted in Azure, but not from the state. I checked the real state with `az` and ran `destroy` again: refresh saw that the resources were already gone.
-- **Result:** the infrastructure was removed. I pinned versions with `~>` and added the lock file to git.
+- The provider constraint `>= 3.118.0` had no upper bound, so `init` pulled a new major version with a bug, and `destroy` failed.
+- **Lesson:** pin providers with `~>` and commit `.terraform.lock.hcl`, so upgrades happen only on purpose.
 
 ### Story 3. CI brought the infrastructure back after `destroy`
-- **Situation:** after a manual `destroy`, pushing a commit with notes created the VM again.
-- **Action:** through the activity log I found that the resources had been created by the CI service principal. The cause: `apply` on every push to main.
-- **Result:** I left only `plan` on push, and I run `apply` manually. The lesson: a pipeline with auto-apply conflicts with manual changes; you need explicit approval.
+- **Situation:** I ran `terraform destroy` by hand. Two days later I pushed a commit with only notes, and the VM appeared again.
+- **Action:** the activity log showed the resource group and VM were created a minute after the push, with `caller` = the CI service principal's object ID, not my email. The cause: the workflow ran `apply` on every push to `main`, whatever files changed; the state was empty, the code still described the VM, so Terraform created it.
+- **Result:** short term, `apply` only on manual `workflow_dispatch`. Now: `plan` on PRs, `apply` of the saved plan on merge, behind an environment approval. The lesson: with auto-apply the code is the source of truth, so to remove infrastructure you remove it from the code, or gate `apply` with an approval.
 
 ### Story 4. A double Ctrl+C left a VM outside the state
 - **Situation:** during `apply -replace` of a VM, the process was killed (simulating a laptop dying). The next `plan` wanted to create the VM again.
