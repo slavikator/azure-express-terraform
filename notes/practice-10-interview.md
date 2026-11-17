@@ -167,6 +167,13 @@ After this practice you should be able to:
    **Correction:** end with the lesson: "not in the state" doesn't mean "not in Azure".
 
    **Tightened:** "In a lab I simulated a laptop dying mid-apply by killing Terraform while it replaced a VM. Afterwards I checked three things separately: the lock was free, the VM wasn't in the state, but `az vm show` showed it running, because Azure finished creating it after Terraform died. I adopted it with an `import` block, confirmed `plan` showed 1 to import and 0 to change, and ended with `No changes`. The lesson: 'not in the state' doesn't mean 'not in Azure', so check each one before acting."
+
+   **Story 5, "an apply that failed halfway":** an apply failed halfway because my trial subscription limits public IPs to 3 and cores to 4. Some resources were created and some weren't: a partial apply. The state isn't broken; Terraform recorded what succeeded. I checked usage with `az`, found a region that covered the IPs and cores I needed, added it to my setup and re-ran `apply`.
+
+   **Correction:** I didn't add a region. For the public IPs I redesigned the exercise to use NSGs (free, no tight quota); for the cores I destroyed the main VM to free them, then re-ran `apply`. Tell what actually happened.
+   **Correction:** end with the lesson: check quotas before big changes; after a partial apply, fix the cause and re-run, don't edit the state by hand. Extra detail: deallocated VMs still count toward the vCPU quota.
+
+   **Tightened:** "On a trial subscription an apply failed halfway: 3 public IPs and 4 vCPUs per region. Some resources were created and some weren't, but the state wasn't broken: Terraform records exactly what succeeded. I checked usage with `az vm list-usage` and `az network list-usages`, freed cores by destroying a VM I didn't need (deallocating isn't enough, it still counts), swapped public IPs for resources without a tight quota, and re-ran `apply`. The lesson: check quotas before big changes, and after a partial apply, fix the cause and re-run, don't touch the state by hand."
 3.
 4.
 5.
