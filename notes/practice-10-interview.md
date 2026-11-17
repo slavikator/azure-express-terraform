@@ -174,6 +174,13 @@ After this practice you should be able to:
    **Correction:** end with the lesson: check quotas before big changes; after a partial apply, fix the cause and re-run, don't edit the state by hand. Extra detail: deallocated VMs still count toward the vCPU quota.
 
    **Tightened:** "On a trial subscription an apply failed halfway: 3 public IPs and 4 vCPUs per region. Some resources were created and some weren't, but the state wasn't broken: Terraform records exactly what succeeded. I checked usage with `az vm list-usage` and `az network list-usages`, freed cores by destroying a VM I didn't need (deallocating isn't enough, it still counts), swapped public IPs for resources without a tight quota, and re-ran `apply`. The lesson: check quotas before big changes, and after a partial apply, fix the cause and re-run, don't touch the state by hand."
+
+   **Story 6, "when `count` and when `for_each`?":** I tried both `count` and `for_each` for a list of NSGs. `count` isn't appropriate here: when an item is removed, the remaining items shift their indexes, and `plan` shows them as removed and added again. `for_each` is right for this kind of list, because the address is a key instead of an index, so removing an item targets exactly that key, with no shifts: `plan` shows only 1 to destroy. Use `count` only for computation; for lists and anything with an address, `for_each`.
+
+   **Correction:** not "`count` only for computation". `count` is for on/off (`count = var.create ? 1 : 0`) or truly identical copies; `for_each` for anything with its own identity.
+   **Correction:** mention the migration: switching `count` → `for_each` changes every address, so I used `moved` blocks (`plan`: only "has moved to", nothing recreated).
+
+   **Tightened:** "With `count`, a resource's address is its position, so removing the first NSG from a list shifted the others and `plan` wanted to recreate them. With `for_each`, the address is a key, so removing one item destroys only that item. I migrated with `moved` blocks so nothing was recreated. I use `count` for on/off (`0 or 1`) or truly identical copies, and `for_each` for anything with its own identity."
 3.
 4.
 5.
