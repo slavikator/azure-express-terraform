@@ -159,6 +159,14 @@ After this practice you should be able to:
    **Follow-up, "why not skip CI when only notes change?":** a `paths` filter would fix this one case, but the real problem was that `apply` could run without anyone looking. The approval fixes every case.
 
    **Tightened:** "I destroyed the infrastructure by hand, then pushed a notes-only change. The VM came back, because the workflow ran `apply` on every push to `main`, regardless of which files changed. In the activity log, the destroy had my email as `caller`, and the new VM had the CI service principal's ID, so I knew the pipeline did it. I changed the flow: PRs run `plan` for review, and after the merge `apply` waits for approval in a GitHub environment. The lesson: with auto-apply, the code is the source of truth."
+
+   **Story 4, "a time the state didn't match reality":** my Mac crashed during the apply. I checked the lock: it wasn't locked. I checked the state: the VM was gone, because the apply was recreating it and had removed the old one but not created the new one. Then I checked Azure, and the VM was there: Terraform had already sent the create request, so Azure finished the job. I added an `import` block for the existing VM, so Terraform wouldn't try to create it again.
+
+   **Correction:** say it was a simulation (Practice 03: a double Ctrl+C during `apply -replace`), not a real crash. In a real crash the lock usually stays stuck and needs `force-unlock`, so the details wouldn't hold up.
+   **Correction:** add the verification: `plan` showed `1 to import, 0 to change`, then `No changes` after the apply.
+   **Correction:** end with the lesson: "not in the state" doesn't mean "not in Azure".
+
+   **Tightened:** "In a lab I simulated a laptop dying mid-apply by killing Terraform while it replaced a VM. Afterwards I checked three things separately: the lock was free, the VM wasn't in the state, but `az vm show` showed it running, because Azure finished creating it after Terraform died. I adopted it with an `import` block, confirmed `plan` showed 1 to import and 0 to change, and ended with `No changes`. The lesson: 'not in the state' doesn't mean 'not in Azure', so check each one before acting."
 3.
 4.
 5.
