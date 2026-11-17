@@ -150,7 +150,15 @@ After this practice you should be able to:
 ## My answers
 
 1. **Step 1 done** (README.md merged in PRs #9 and #10; "What I'd do next" dropped on purpose). Skipped the read-back exercise; went through every README section in a review instead: remote state in a separate bootstrapped RG with one key per root, versioning, soft delete and blob lease locking, validation/precondition vs Azure Policy, OIDC with three federated credentials, the ruleset (`~DEFAULT_BRANCH`, a GitHub setting, not code) and the environment gate, job-level permissions replacing top-level ones, `-detailed-exitcode`, tflint plugins via `.tflint.hcl`, the SSH public-key flow, and the prerequisites (data-plane role for the state). Fixed along the way: prod tags had `env = "dev"`.
-2.
+2. **Step 2, in interviewer mode (chat, no recording).** Story 1 retold in my own words; Story 2 cut to the lesson (pin with `~>`, commit the lock file); the Container Apps story dropped as too specific.
+
+   **Story 3, "a time automation did something you didn't expect":** I destroyed everything by hand, then pushed a notes-only change, expecting CI not to run because no Terraform code changed. The VM came back, because the workflow ran on every push. In the activity log the destroy had my email as `caller`, and the new VM had the service principal's ID, so the pipeline had done it. Fix: dispatch runs `plan` without `apply`, and push only runs after the PR is reviewed and approved.
+
+   **Correction:** the approval isn't on the PR. The PR runs `plan` for the reviewer; the merge is the push to `main` that starts `apply`, and `apply` waits for approval in the `dev` environment.
+   **Correction:** end with the lesson: with auto-apply, the code is the source of truth, so to remove infrastructure you remove it from the code.
+   **Follow-up, "why not skip CI when only notes change?":** a `paths` filter would fix this one case, but the real problem was that `apply` could run without anyone looking. The approval fixes every case.
+
+   **Tightened:** "I destroyed the infrastructure by hand, then pushed a notes-only change. The VM came back, because the workflow ran `apply` on every push to `main`, regardless of which files changed. In the activity log, the destroy had my email as `caller`, and the new VM had the CI service principal's ID, so I knew the pipeline did it. I changed the flow: PRs run `plan` for review, and after the merge `apply` waits for approval in a GitHub environment. The lesson: with auto-apply, the code is the source of truth."
 3.
 4.
 5.
