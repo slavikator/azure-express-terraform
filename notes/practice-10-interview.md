@@ -181,6 +181,12 @@ After this practice you should be able to:
    **Correction:** mention the migration: switching `count` → `for_each` changes every address, so I used `moved` blocks (`plan`: only "has moved to", nothing recreated).
 
    **Tightened:** "With `count`, a resource's address is its position, so removing the first NSG from a list shifted the others and `plan` wanted to recreate them. With `for_each`, the address is a key, so removing one item destroys only that item. I migrated with `moved` blocks so nothing was recreated. I use `count` for on/off (`0 or 1`) or truly identical copies, and `for_each` for anything with its own identity."
+
+   **❓2, the two strongest stories:** I picked the provider bound for "something broke" and CI recreating the VM for "a problem you debugged".
+
+   **Correction:** the provider story is now only the lesson, so it can't survive "how did you find it?". Use Story 1 (CI hung on `init`) for "something broke / a production incident", and Story 3 (CI recreated the VM) for "a problem you debugged" or "a time you improved a process". Keep the provider story as a short example of why I pin versions.
+
+   **Step 2 done.**
 3.
 4.
 5.
