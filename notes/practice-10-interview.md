@@ -187,7 +187,25 @@ After this practice you should be able to:
    **Correction:** the provider story is now only the lesson, so it can't survive "how did you find it?". Use Story 1 (CI hung on `init`) for "something broke / a production incident", and Story 3 (CI recreated the VM) for "a problem you debugged" or "a time you improved a process". Keep the provider story as a short example of why I pin versions.
 
    **Step 2 done.**
-3.
+3. **Step 3, walkthrough in parts (chat, no recording).** Ran over time on part 4 (the pipeline): I listed checkout/install/init for every job. **Cut:** per-job steps; keep the gates, and give details only if asked.
+
+   - **Part 1, architecture:** I described the two RGs (project and state). **Correction:** that's part 3. Part 1 is what runs and where: the app, the network, the region, the environments.
+   - **Part 2, code structure:** dev and prod environments, modules for network and VMs reused by both. **Correction:** say why the roots are separate (own state file each, smaller blast radius); prod is only planned, `apply` runs for dev only.
+   - **Part 3, state:** a separate RG, versioning, soft delete, a lock, Entra-only access. **Correction:** add why for each. The state must exist before Terraform runs (bootstrap) and destroying the project can't delete it; versioning = roll back, soft delete = recover, a blob lease = no two applies at once, Entra-only = no storage keys, RBAC data role. One key per root.
+   - **Part 4, pipeline:** every job and step in order. **Correction:** `plan` runs for dev and prod; I missed both gates (the ruleset requires 5 checks before merge; `apply` waits for environment approval); the artifact is the binary `tfplan`, the text goes to the PR comment.
+   - **Part 5, security:** no long-lived secrets (OIDC), policy allows only `swedencentral`, an NSG, access over a public IP. **Correction:** a public IP isn't a control; say SSH keys only and an NSG with only needed ports. Add Entra-only state, least-privilege job permissions, guardrails at two levels (validation at plan, Policy at apply), and name the gap: the public SSH port, Bastion in production.
+   - **Part 6, a story:** Story 1 (init hung on the empty backend block). **Correction:** `terraform init` prompted, not `az`; the values were written into the code and committed; end with the lesson.
+
+   **Full five-minute version:**
+
+   1. "It's a small Express app running in Docker on a Linux VM in Azure. The VM sits in a VNet subnet behind an NSG, with a public IP, in `swedencentral`, and there are separate dev and prod environments. All of it is described in Terraform and deployed by GitHub Actions."
+   2. "There are reusable modules for the network and the VM, and two environment roots, dev and prod, that call them with different inputs. Each root has its own state file, so a change in dev can't touch prod. That keeps the blast radius small. In the pipeline both are planned on every PR, but only dev is applied."
+   3. "The state lives in a storage account in its own resource group, created once before the project, so destroying the project can't touch it. Each environment has its own state file. Versioning and soft delete let me recover a corrupted or deleted state, a blob lease locks it so two applies can't run at once, and access is Entra-only, with no storage keys, through an RBAC data role."
+   4. "On a PR, validate runs for both roots and a lint job runs fmt, TFLint and Checkov in parallel. If both pass, plan runs for dev and prod with OIDC and posts the plan as a PR comment. A ruleset on main requires all those checks to pass before merging. The merge reruns the pipeline, saves the plan file as an artifact, and the apply job waits for approval in a GitHub environment, then applies exactly that saved plan. Prod is planned but not auto-applied."
+   5. "There are no long-lived secrets: the pipeline signs in to Azure with OIDC, and the state is Entra-only with no storage keys. Each CI job gets only the permissions it needs. Guardrails work at two levels: variable validation catches a wrong region or VM size at plan, and Azure Policy blocks it at apply. The VM uses SSH keys only, and the NSG opens only the ports it needs. The weak spot is the public SSH port; in production I'd remove it and go through Bastion."
+   6. "The pipeline hung on `terraform init`. The backend block in the code was empty; locally, init had asked me for the values and cached them in `.terraform/`, which isn't in git, so the fresh CI runner sat waiting for input. I wrote the values into the code and added `-input=false`, so anything missing now fails with a clear error instead of hanging. The lesson: CI only has what's in git, so it has to run with no prompts at all."
+
+   **Step 3 done.**
 4.
 5.
 6.
