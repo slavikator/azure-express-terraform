@@ -255,6 +255,11 @@ After this practice you should be able to:
        > "I'd use Azure Bastion: the admin connects over HTTPS with Entra sign-in and MFA, and Bastion reaches the VM's private IP, so the VM has no public IP and the NSG allows SSH only from the Bastion subnet. Keys only, no passwords. Alternatives are JIT access, which opens the port briefly for one IP, or a VPN. In my project port 22 is open, which is the gap I'd close this way."
 
    **To review:** identity (SP vs MI; authentication vs authorization); private networking (private endpoint + DNS, Bastion, NSG evaluation); secrets in the state and the three layers of cost control. **Pattern:** I know the ideas but miss the names (private endpoint, Bastion, budget, SKU). Azure is my weaker area.
+
+   **Session 3, CI/CD and scenarios (in progress).**
+
+   1. **PR to production (7).** I said: a push triggers the pipeline; validate for both envs, lint for the whole project, plan for both envs posted as a PR comment; the reviewer accepts, the pipeline runs again, the plan is uploaded as an artifact and the apply job applies that exact file; if the plan changes in between, apply fails. **Correction:** name both gates: the ruleset `protect-main` requires a PR and five passing checks (`validate (dev)`, `validate (prod)`, `lint`, `plan (dev)`, `plan (prod)`, the job names) before merging, plus required approvals in a team; after the merge, `apply` pauses for environment approval (Settings → Environments → `dev`, required reviewers, Approve/Reject). The ruleset protects the code, the environment protects the infrastructure. A stale saved plan is refused ("saved plan is stale"), not shown as new changes. Add promotion: dev first, then prod with its own plan and stricter approval.
+      > "The PR runs validate and lint, then a plan for dev and prod, posted as a comment. A ruleset blocks the merge until checks pass and a reviewer approves. The merge reruns the pipeline: the plan is saved as an artifact, and the apply job waits for environment approval, then applies exactly that file. If the state changed meanwhile, Terraform rejects the stale plan. After dev is verified, the same change goes to prod with its own plan and a stricter approval."
 5.
 6.
 7.
