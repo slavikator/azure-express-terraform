@@ -282,6 +282,24 @@ After this practice you should be able to:
    **To review:** rollback and recovery (git, not state; backups); access to production (read-only for people, only the pipeline writes, break-glass); concrete techniques after the principle. **Pattern:** the right order of thinking (stop, find the cause, fix safely), but too few specifics.
 
    **All sessions:** Terraform 71, Azure 48, CI/CD 61. Weakest: Azure identity and networking.
+
+   **Session 4, Session 2 retried (Azure): 87/100, up from 48.**
+
+   1. **SP vs MI (8, was 2).** I said: MI only inside Azure, SP for access from outside; SP needs a token, MI authenticates with Entra with no secrets; SP for GitHub Actions, MI for the database. **Correction:** open with "both are identities for applications, not people"; an MI is an SP that Azure manages; an SP needs credentials I manage (secret, certificate or OIDC; mine uses OIDC, so no stored secret).
+   2. **RBAC (9, was 1; first retry 6).** I said: who (SP, MI), what (Reader, Contributor, Owner, data roles), where (scope from the management group down, inherited); roles add up, denied when not assigned; my pipeline has Contributor + Storage Blob Data Contributor on the state; narrow scopes. **Correction:** "who" also includes users and groups; in a team, assign roles to groups. The first retry ("who can do what and where") was too short: say what each part is, with an example.
+   3. **Contributor vs Owner (9, was 8).** **Correction:** "both can manage all resources", not "full access"; name User Access Administrator.
+   4. **NSG (9, was 6).** I said: a firewall on a subnet or NIC; rules by priority, lowest first, first match wins; inbound denied by default; allow 22 for SSH; inbound allows the replies. **Correction:** denied by default from the internet, the VNet is allowed; stateful means replies pass, not new outbound connections.
+   5. **Private access to storage (9, was 3).** I said: private endpoint (a NIC with a private IP representing the account), private DNS, public access closed. **Correction:** compare with a service endpoint (simpler, but storage keeps its public IP).
+   6. **VM vs VMSS vs App Service (9, was 7).** I said: a VM = full control (OS, patches); VMSS = identical VMs with autoscale, still OS control; App Service = PaaS, Azure handles OS, TLS, scaling; App Service for web/API, VMSS for OS control or non-HTTP. **Correction:** I configure the scaling rules, Azure runs them; one VM is a single point of failure; VMSS sits behind a load balancer.
+   7. **Secrets (7, was 5).** I said: Key Vault + managed identity so Terraform holds no secrets; passed as env vars, sensitive, the state protected because they end up there; best, Entra auth. **Correction:** those contradict; separate the cases: Terraform passes the secret → it's in the state; Terraform creates only the vault and access → not in the state; Entra auth → nothing to store.
+      > "The app reads secrets from Key Vault with its managed identity, so it has no credentials of its own. Where Terraform must pass a secret, it comes from CI as an environment variable, marked sensitive, and since it still ends up in the state, the state is locked down. Better, Terraform creates only the vault and the access, and the secret is set outside it. Best, there's no password: Entra auth to the database with a managed identity."
+   8. **Policy vs RBAC (9, was 6).** **Correction:** state the contrast in one line (RBAC = who does which actions; Policy = what resources may look like); Policy reports compliance on existing resources.
+   9. **Cost control (9, was 5).** **Correction:** add reservations or savings plans for steady production load.
+   10. **Secure SSH (9, was 5).** **Correction:** normal SSH keys aren't short-lived; say "keys only", or name Entra ID SSH login (short-lived certificates).
+
+   **What changed:** I now use the names (private endpoint, Bastion, budget, SKU) and finish with my project. **Left:** secrets, separating the cases.
+
+   **Step 4 done.**
 5.
 6.
 7.
