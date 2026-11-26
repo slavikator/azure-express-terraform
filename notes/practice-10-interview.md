@@ -300,6 +300,19 @@ After this practice you should be able to:
    **What changed:** I now use the names (private endpoint, Bastion, budget, SKU) and finish with my project. **Left:** secrets, separating the cases.
 
    **Step 4 done.**
-5.
+5. **Terraform Associate 004** (tests Terraform 1.12; [objectives](https://developer.hashicorp.com/certifications/terraform-associate), [content list](https://developer.hashicorp.com/terraform/tutorials/certification-004/associate-review-004)) mapped to my weeks:
+
+   | Domain | Weeks | Status |
+   |---|---|---|
+   | 1. IaC (what, advantages, multi-cloud/service-agnostic) | 2, 10 | ✅, 1c light |
+   | 2. Fundamentals (providers, versions, `alias`, state) | 2, 3 | ✅ |
+   | 3. Core workflow (init, validate, plan, apply, destroy, fmt) | 2, 9 | ✅ |
+   | 4. Configuration (resource/data, references, variables/outputs, complex types, expressions, dependencies, custom conditions, sensitive data) | 2, 5, 8 | ✅, Vault is a gap |
+   | 5. Modules (sources, variable scope, use, versions) | 6 | ✅ |
+   | 6. State (local backend, locking, remote backend, drift) | 3, 9 | ✅, local backend light |
+   | 7. Maintain (import, CLI state inspection, verbose logging) | 3 | ⚠️ no `TF_LOG` |
+   | 8. HCP Terraform (runs, collaboration and governance, workspaces and projects, VCS integration) | 10 (one Q/A) | ❌ biggest gap |
+
+   **Gaps and plan:** HCP Terraform (a concepts session); `TF_LOG`/`TF_LOG_PATH`; the Vault provider (reads secrets, which still land in the state); skim the local backend and the multi-cloud argument. Then a practice test.
 6.
 7.
