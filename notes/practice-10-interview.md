@@ -341,4 +341,20 @@ After this practice you should be able to:
    > "The hardest decision was how many regions. One region with zone redundancy covers datacenter failures cheaply; a second region covers a regional outage but roughly doubles the cost and adds async replication, so some data loss on failover. I'd let the business's RTO and RPO decide: if minutes of downtime matter, two regions, active-passive to save cost; more regions only for worldwide users, within data residency rules."
 
    **Step 6 done.**
-7.
+7. **Step 7, final cleanup.** Resource groups: only `rg-tfstate` and `NetworkWatcherRG`. App registrations: only `github-actions-terraform` (`--show-mine` was empty because I sign in as a guest; `--all` showed it); the old week 1 SP was already deleted. Role assignments: Contributor on the subscription and Storage Blob Data Contributor on the state account, both confirmed for the CI app with `--assignee` (the empty name column was a display quirk, not an orphan). Budget: $5/month at the billing account scope (so `az consumption budget list` on the subscription showed nothing), alerts at 50/80/100% actual. Optional: add a forecasted 100% alert. To tighten later: Contributor scoped to the project RGs instead of the subscription.
+
+   **❓7:** I didn't find anything. Unused identities aren't tracked and can be targeted by hackers.
+
+   **Correction:** make it concrete: they keep their roles and often a valid, unrotated secret; nobody watches their sign-ins, so misuse goes unnoticed; access nobody needs is pure risk (least privilege). Prevention: access reviews, delete unused apps and roles, prefer OIDC and managed identities.
+   > "I found nothing to remove: only the CI app with its two roles is left, the old service principal from week 1 was already deleted, and my $5 budget alert is in place. Unused identities matter because they keep their roles and often a valid secret, but nobody watches them, so a leaked credential can be abused unnoticed. Access nobody needs is pure risk, so I review identities regularly, delete unused ones, and prefer OIDC and managed identities with no secrets."
+
+   **Step 7 done.**
+
+## Summary
+
+- **Stories:** six STAR stories, retold and tightened; strongest: Story 1 (CI hung on `init`) for "something broke" and Story 3 (CI recreated the VM) for "a problem you debugged / improved a process".
+- **Walkthrough:** six parts in five minutes; keep the gates, drop per-job steps.
+- **Mock interviews:** Terraform 71, Azure 48 → 87 on retry, CI/CD 61. Habit to keep: a one-line definition, the right names, then my own project. Still weakest: rollback (git, not state), production access (read-only people, break-glass), secrets in the state.
+- **Exam check:** Terraform Associate 004 mapped; only HCP Terraform is a real gap; not taking the exam for now.
+- **System design:** App Service + PostgreSQL Flexible Server, zone redundancy, a second region with an async replica and Front Door, RTO/RPO, private endpoint + VNet integration, slots and monitoring, cost of resilience.
+- **Cleanup:** the account holds only the state RG, the Network Watcher RG, one CI app with two roles, and a $5 budget.
