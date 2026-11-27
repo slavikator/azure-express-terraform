@@ -66,7 +66,7 @@ Permissions are **inherited downward**: a role on a subscription applies to ever
 
 ```
 Security principal
-├── User               a person: slavikator@gmail.com
+├── User               a person: user@example.com
 ├── Group              a group of people or other principals
 ├── Service principal  a program: github-actions-terraform
 └── Managed identity   an Azure resource (VM, App Service); technically also a service principal
