@@ -89,41 +89,33 @@ What you must cover:
 ## My interview stories (STAR)
 
 ### Story 1. CI hung on `terraform init`
-- **Situation:** after a refactor, the GitHub Actions pipeline hung on the `terraform init` step.
-- **Task:** find the cause and make the pipeline reliable.
-- **Action:** I found that the `backend "azurerm"` block had become empty. Locally the parameters had been entered interactively and saved in `.terraform/`, but in CI Terraform waited for input. I wrote the backend configuration explicitly and added `-input=false` to all commands.
-- **Result:** init passes. If parameters are missing, the step fails right away with an error instead of hanging. The lesson: always use `-input=false` in CI.
+- **Situation:** the `backend "azurerm"` block held only a placeholder comment, no values; I meant to fill it in later and forgot. Locally it didn't matter: `terraform init` asked for the backend values interactively, I typed them, and Terraform cached them in `.terraform/` (gitignored).
+- **Task:** after I added a GitHub Actions pipeline, the job hung on `terraform init`; find out why and make the pipeline reliable.
+- **Action:** a CI runner starts fresh, with only what's in git: no `.terraform/` cache and no values in the code, so init waited for input nobody could give. I wrote the backend values explicitly into `providers.tf`, added `-input=false` to `init` and `apply`, and removed an unused variable without a default that would have made `apply` hang next.
+- **Result:** init passes, and any missing input now fails fast with an error instead of hanging. The lesson: local success proves nothing about CI; the runner has none of your local state, so CI must be fully non-interactive.
 
-### Story 2. State diverged from Azure
-- **Situation:** `apply` failed with `ManagedEnvironmentNoAvailableCapacityInRegion`, but Azure later created the Container Apps environment anyway.
-- **Task:** bring the state back in line with reality.
-- **Action:** I found the resource with `az` and tried `import`, but the service's own `provisioningState` turned out to be `Failed`, even though the general resource status showed `Succeeded`. I removed it from the state (`state rm`), deleted it, and moved the environment to another region.
-- **Result:** the infrastructure came up. The lessons: check the state of the specific service, not the general resource status; know the subscription's limits (a trial allows only one environment).
+### Story 2. A provider without an upper version bound
+- The provider constraint `>= 3.118.0` had no upper bound, so `init` pulled a new major version with a bug, and `destroy` failed.
+- **Lesson:** pin providers with `~>` and commit `.terraform.lock.hcl`, so upgrades happen only on purpose.
 
-### Story 3. A provider without an upper version bound
-- **Situation:** `terraform destroy` failed twice with `polling support ... was not implemented`.
-- **Task:** cleanly remove the infrastructure.
-- **Action:** I found that the constraint `>= 3.118.0` had pulled in azurerm 5.8.0, which had a bug. Resources were deleted in Azure, but not from the state. I checked the real state with `az` and ran `destroy` again: refresh saw that the resources were already gone.
-- **Result:** the infrastructure was removed. I pinned versions with `~>` and added the lock file to git.
+### Story 3. CI brought the infrastructure back after `destroy`
+- **Situation:** I ran `terraform destroy` by hand. Two days later I pushed a commit with only notes, and the VM appeared again.
+- **Action:** the activity log showed the resource group and VM were created a minute after the push, with `caller` = the CI service principal's object ID, not my email. The cause: the workflow ran `apply` on every push to `main`, whatever files changed; the state was empty, the code still described the VM, so Terraform created it.
+- **Result:** short term, `apply` only on manual `workflow_dispatch`. Now: `plan` on PRs, `apply` of the saved plan on merge, behind an environment approval. The lesson: with auto-apply the code is the source of truth, so to remove infrastructure you remove it from the code, or gate `apply` with an approval.
 
-### Story 4. CI brought the infrastructure back after `destroy`
-- **Situation:** after a manual `destroy`, pushing a commit with notes created the VM again.
-- **Action:** through the activity log I found that the resources had been created by the CI service principal. The cause: `apply` on every push to main.
-- **Result:** I left only `plan` on push, and I run `apply` manually. The lesson: a pipeline with auto-apply conflicts with manual changes; you need explicit approval.
-
-### Story 5. A double Ctrl+C left a VM outside the state
+### Story 4. A double Ctrl+C left a VM outside the state
 - **Situation:** during `apply -replace` of a VM, the process was killed (simulating a laptop dying). The next `plan` wanted to create the VM again.
 - **Task:** recover without losing or duplicating anything.
 - **Action:** diagnosed with commands, not guesses: the state lock was free, `state list` didn't contain the VM, but `az vm show` showed it in Azure as `Succeeded`. Azure had finished creating it after Terraform was killed. Imported it with an `import` block, checked `plan` showed `1 to import, 0 to change`, then `No changes`.
 - **Result:** no duplicate VM, no data loss. Lessons: one Ctrl+C is a graceful stop that records results; check lock, state and Azure separately; "not in the state" doesn't mean "not in Azure".
 
-### Story 6. Trial quotas and partial applies
+### Story 5. Trial quotas and partial applies
 - **Situation:** an `apply` failed with `PublicIPCountLimitReached` (3 public IPs per region), and another with the regional vCPU quota (4 cores), while other resources in the same apply succeeded.
 - **Task:** understand what was created and finish the deployment.
 - **Action:** checked usage with `az network list-usages` and `az vm list-usage`; saw that Terraform had recorded exactly what succeeded (a partial apply, not a broken state). Redesigned the exercise to use resources without tight quotas, and re-ran `apply` once parallel deletions had released cores. Also learned that deallocated VMs still count toward the vCPU quota.
 - **Result:** completed without manual state edits. Lessons: check quotas before big changes; independent resources are created in parallel, so a create can race a delete; the state always reflects what actually happened.
 
-### Story 7. A `count` list nearly recreated resources
+### Story 6. A `count` list nearly recreated resources
 - **Situation:** removing the first item from a list used with `count` showed `2 to add, 3 to destroy` instead of deleting one resource.
 - **Action:** recognized that `count` addresses are positions, so every later item shifted. Migrated to `for_each` with three `moved` blocks (plan: only `has moved to`), then removed the item again: `1 to destroy`, and the remaining resources kept their IDs.
 - **Result:** a safe pattern for collections: `for_each` with stable keys, and `moved` blocks for migrations.
@@ -156,6 +148,57 @@ Walk an interviewer through your project in 5 minutes: the architecture, why you
 
 **What would you improve in your project?**
 > Move CI to OIDC and a plan/apply split with a saved plan and approvals; restrict SSH through Bastion instead of an open port; switch the state backend to Entra auth with shared keys disabled and private network access; add tflint, checkov and drift detection; and run the app as a versioned container image from ACR instead of building it on the VM.
+
+**How does secretless (OIDC) login from GitHub Actions to Azure work?**
+> The job requests a short-lived OIDC token from GitHub and sends it with the app's client ID to Entra; Entra verifies GitHub's signature, matches issuer, subject and audience against the app's federated credential, and issues its own Azure token, and the job's actions are then limited by the service principal's RBAC roles.
+
+**What is Infrastructure as Code?**
+> Infrastructure is defined declaratively in version-controlled code, reviewed through pull requests and applied by a pipeline, so environments are repeatable and auditable, and drift can be detected and corrected.
+
+**Where does your Terraform state live, and why there?**
+> State lives remotely in a dedicated, bootstrapped storage account outside the environments it describes, with one state file per environment, so environments are isolated and destroying one never touches its own state.
+
+**How is the state protected?**
+> The state blob has versioning and soft delete, so I can roll back a bad write or undelete it, and Terraform locks it with a blob lease so two runs can never write at once. Access is Entra ID only, with shared keys disabled.
+
+**What is HCP Terraform (Terraform Cloud), and why didn't you use it?**
+> HCP Terraform is managed Terraform: remote state and locking, workspaces, VCS-driven plan and apply, dynamic OIDC credentials, and policy as code with Sentinel or OPA. I built the same pieces myself with Azure Storage and GitHub Actions, which gives more control and lower cost; HCP trades that for less to maintain.
+
+**What triggers your pipeline, and what does each trigger do?**
+> PRs into main run checks and plan, a merge to main runs plan and a gated apply, and workflow_dispatch lets me rerun the pipeline by hand without applying.
+
+**Why are validate and lint separate jobs?**
+> Per-root checks like validate run in a matrix per environment; whole-repo scans like fmt, tflint and checkov run once in a parallel job, and plan waits for both.
+
+**Why does every job check out the code and install Terraform again?**
+> Every job runs on a fresh runner, so it checks out the commit under test and installs a pinned Terraform version; pinning matters because a saved plan can only be applied by the exact same version.
+
+**How do you limit what each CI job can do?**
+> Each job gets only the token scopes it needs: read-only by default, `pull-requests: write` only in the job that posts the plan comment, and `id-token: write` only where Azure login is needed. A job-level permissions block replaces the top-level one, so it can also grant less.
+
+**How does your drift detection work?**
+> A nightly refresh-only plan with `-detailed-exitcode` (0 no changes, 1 error, 2 changes) and `-lock=false` turns drift into a failing job without blocking real applies; the setup-terraform wrapper must be disabled, or it treats exit code 2 as success.
+
+**What does TFLint add to `terraform validate`?**
+> TFLint is a pluggable linter: `.tflint.hcl` pins the azurerm ruleset, `tflint --init` downloads it, and it catches Azure-specific mistakes like invalid VM sizes that `terraform validate` can't see.
+
+**How do you catch cost before it's spent?**
+> Infracost prices the Terraform plan in CI and comments the monthly cost diff on the PR, so cost is reviewed alongside the change, while budgets and anomaly alerts in Cost Management catch what actually gets spent.
+
+**What is Azure Front Door?**
+> Front Door is the global HTTP entry point: anycast at Microsoft's edge, TLS, WAF and caching close to the user, health-based failover between regions, and the origin locked so traffic can only arrive through Front Door.
+
+**What's the difference between layer 4 and layer 7 load balancing?**
+> Layer 4 balances connections by IP and port; layer 7 understands HTTP, so it can route by path, terminate TLS, cache, and run a WAF. Load Balancer is L4; Application Gateway and Front Door are L7.
+
+**What are deployment slots for?**
+> Deployment slots let you deploy to a warmed-up staging copy of the app, validate it, and swap it into production with no downtime; rollback is just swapping back. Sticky settings keep environment-specific config like connection strings with the slot.
+
+**How would you give SSH access without an open port 22?**
+> The VM has only a private IP and the NSG allows SSH only from AzureBastionSubnet. Users connect over TLS through Azure Bastion, authenticated with Entra ID and RBAC, ideally with Entra SSH login so there are no keys to manage. For cheaper setups, JIT access opens the port only for my IP and only for a limited time.
+
+**What is Azure Resource Graph used for?**
+> Azure Resource Graph is a KQL-queryable index of all resources across subscriptions. I use it for inventory and governance: untagged or orphaned resources, insecure settings, policy compliance, and recent changes, respecting RBAC and without touching the resources.
 
 ## Interview questions
 
